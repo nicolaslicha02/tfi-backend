@@ -96,10 +96,10 @@ public class DatabaseSeeder
             AsignarPermisos(rolSolicitante, permisos, "espacios.ver", "reservas.solicitar", "reservas.ver_propias", "reservas.cancelar", "catalogos.ver");
 
             // ResponsableEspacio:
-            AsignarPermisos(rolResponsable, permisos, "espacios.ver", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
+            AsignarPermisos(rolResponsable, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
 
             // SecretariaAcademica:
-            AsignarPermisos(rolSecretaria, permisos, "espacios.ver", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
+            AsignarPermisos(rolSecretaria, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
 
             // Administrador: todos los permisos
             foreach (var permiso in permisos)
