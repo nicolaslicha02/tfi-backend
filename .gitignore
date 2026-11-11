@@ -1,0 +1,18 @@
+## Build & Output
+**/[Bb]in/
+**/[Oo]bj/
+[Bb]in/
+[Oo]bj/
+TestResults/
+*.log
+
+## IDE & Editors
+.vs/
+.idea/
+.vscode/
+*.user
+*.userosscache
+*.suo
+
+## Sensitive Settings
+appsettings.Development.json
