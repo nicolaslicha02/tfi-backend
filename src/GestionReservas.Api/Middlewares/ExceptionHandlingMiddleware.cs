@@ -86,6 +86,10 @@ public class ExceptionHandlingMiddleware
                 problemDetails.Title = "Conflicto con el estado actual del recurso";
                 problemDetails.Detail = conflictEx.Message;
                 problemDetails.Type += "409";
+                if (conflictEx.DetalleExtra != null)
+                {
+                    problemDetails.Extensions["reservasAfectadas"] = conflictEx.DetalleExtra;
+                }
                 _logger.LogWarning(conflictEx, "Conflicto en {Path}", context.Request.Path);
                 break;
 

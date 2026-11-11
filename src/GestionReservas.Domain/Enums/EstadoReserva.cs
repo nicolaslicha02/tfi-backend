@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace GestionReservas.Domain.Enums;
 
 /// <summary>
 /// Representa los posibles estados por los que atraviesa una solicitud de reserva.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum EstadoReserva
 {
     /// <summary>

@@ -17,8 +17,12 @@ if (builder.Environment.IsDevelopment())
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
-// 2. Controladores
-builder.Services.AddControllers();
+// 2. Controladores con serialización de enums como texto (JsonStringEnumConverter)
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 
 // 3. Swagger / OpenAPI con Swashbuckle
 builder.Services.AddEndpointsApiExplorer();

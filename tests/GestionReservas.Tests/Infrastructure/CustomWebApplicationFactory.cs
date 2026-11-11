@@ -1,4 +1,4 @@
-using GestionReservas.Infrastructure.Persistence;
+﻿using GestionReservas.Infrastructure.Persistence;
 using GestionReservas.Infrastructure.Persistence.Seed;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -59,10 +59,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 options.UseNpgsql(testConnectionString, npgsqlOptions =>
                 {
                     npgsqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
-                    npgsqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 3,
-                        maxRetryDelay: TimeSpan.FromSeconds(5),
-                        errorCodesToAdd: null);
                 });
             });
 
@@ -115,3 +111,4 @@ public class TestHostPipeWriterFixStartupFilter : IStartupFilter
         };
     }
 }
+

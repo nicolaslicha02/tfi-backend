@@ -6,7 +6,18 @@ namespace GestionReservas.Application.Common.Exceptions;
 /// </summary>
 public class ConflictException : Exception
 {
+    /// <summary>
+    /// Información complementaria sobre el conflicto (ej: listado de reservas afectadas por un bloqueo).
+    /// </summary>
+    public object? DetalleExtra { get; }
+
     public ConflictException(string message) : base(message)
     {
     }
+
+    public ConflictException(string message, object? detalleExtra) : base(message)
+    {
+        DetalleExtra = detalleExtra;
+    }
 }
+

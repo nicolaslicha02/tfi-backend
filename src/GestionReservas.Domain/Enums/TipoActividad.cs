@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace GestionReservas.Domain.Enums;
 
 /// <summary>
 /// Tipos de actividad para las cuales se puede solicitar la reserva de un espacio.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TipoActividad
 {
     /// <summary>

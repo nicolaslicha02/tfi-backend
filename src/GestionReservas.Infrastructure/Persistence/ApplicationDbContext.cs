@@ -1,4 +1,4 @@
-using GestionReservas.Application.Common.Interfaces;
+﻿using GestionReservas.Application.Common.Interfaces;
 using GestionReservas.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,6 +36,11 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<AsignacionEspacio> AsignacionesEspacio => Set<AsignacionEspacio>();
     public DbSet<HistorialMatricula> HistorialesMatricula => Set<HistorialMatricula>();
 
+    public async Task AcquireAdvisoryXactLockAsync(long key, CancellationToken cancellationToken = default)
+    {
+        await Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({key})", cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -44,3 +49,4 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
     }
 }
+

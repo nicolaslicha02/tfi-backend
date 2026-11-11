@@ -17,6 +17,7 @@ public static class PermisosDefinidos
     public const string ReservasVerPendientes = "reservas.ver_pendientes";
     public const string ReservasAprobarRechazar = "reservas.aprobar_rechazar";
     public const string ReservasCancelar = "reservas.cancelar";
+    public const string ReservasModificar = "reservas.modificar";
 
     // Bloqueos
     public const string BloqueosVer = "bloqueos.ver";
@@ -41,6 +42,7 @@ public static class PermisosDefinidos
         ReservasVerPendientes,
         ReservasAprobarRechazar,
         ReservasCancelar,
+        ReservasModificar,
         BloqueosVer,
         BloqueosCrear,
         CatalogosVer,

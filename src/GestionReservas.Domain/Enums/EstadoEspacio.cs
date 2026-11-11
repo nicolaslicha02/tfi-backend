@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace GestionReservas.Domain.Enums;
 
 /// <summary>
 /// Representa la disponibilidad operativa de un espacio físico.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum EstadoEspacio
 {
     /// <summary>

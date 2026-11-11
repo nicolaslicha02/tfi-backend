@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using GestionReservas.Application.Common.Interfaces;
 using GestionReservas.Domain.Constants;
 using GestionReservas.Infrastructure.Persistence;
@@ -30,10 +30,6 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
-                npgsqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
-                    errorCodesToAdd: null);
             });
         });
 
@@ -112,3 +108,4 @@ public static class DependencyInjection
         return services;
     }
 }
+

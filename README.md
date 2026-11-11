@@ -128,9 +128,31 @@ Si no se configura User Secrets, el sistema cuenta con un fallback seguro para e
 - `DELETE /api/espacios/{id}`: Baja lógica (`FechaBaja`). Impide la baja si existen reservas futuras pendientes o aprobadas (HTTP 409).
 - `GET /api/espacios/disponibles`: Búsqueda de espacios disponibles en una fecha y franja horaria determinadas con filtros de capacidad mínima y equipamientos requeridos.
 
+### Gestión de Reservas y Notificaciones (`/api/reservas`, `/api/mis-reservas`, `/api/notificaciones`)
+- `POST /api/reservas`: Solicitud de reserva con control de disponibilidad, capacidad, equipamiento y bloqueos. Auto-aprobada si el solicitante es Responsable del departamento, Secretaría o Administrador.
+- `GET /api/mis-reservas`: Reservas del usuario autenticado con filtros por estado y rango de fechas.
+- `GET /api/reservas/pendientes`: Solicitudes pendientes de revisión (Responsable ve su departamento; Secretaría y Admin ven todas).
+- `GET /api/reservas/canceladas` y `GET /api/reservas/rechazadas`: Reservas canceladas o rechazadas.
+- `GET /api/reservas/{id}`: Detalle completo con historial de auditoría de transiciones de estado.
+- `PATCH /api/reservas/{id}`: Aprobación, rechazo (con motivo obligatorio) o cancelación con máquina de estados (`ReservaStateMachine`).
+- `PUT /api/reservas/{id}`: Modificación de reserva; si estaba aprobada vuelve a pendiente y se revalida.
+- `GET /api/notificaciones` y `PATCH /api/notificaciones/{id}/leer`: Consulta y marcado de notificaciones del usuario.
+
+### Gestión de Bloqueos de Espacios (`/api/bloqueos`)
+- `POST /api/bloqueos`: Registro de inhabilitación temporal de un espacio físico por obras, reparaciones o actos institucionales.
+- `GET /api/bloqueos`: Listado paginado de bloqueos con filtros (espacioId, desde, hasta, vigentes) y alcance departamental.
+- `DELETE /api/bloqueos/{id}`: Levantamiento del bloqueo con registro en auditoría.
+
 ---
 
 ## 6. Reglas de Negocio y Manejo de Fechas
+
+### Regla de Reservas Afectadas por Bloqueo
+Al intentar registrar un bloqueo sobre un espacio físico (`POST /api/bloqueos`):
+1. **Detección de Afectaciones**: El sistema evalúa todas las reservas en estado `Aprobada` o `PendienteAprobacion` que se superpongan temporalmente con el intervalo solicitado ($inicio_A < fin_B \land fin_A > inicio_B$).
+2. **Rechazo por defecto (`cancelarReservasAfectadas = false`)**: Si existen reservas afectadas y el flag es falso (comportamiento por defecto), la operación se aborta arrojando **HTTP 409 Conflict** con el listado detallado de reservas afectadas (`id`, `solicitante`, `fechas`, `estado`), impidiendo la creación del bloqueo hasta que se defina la acción.
+3. **Cancelación Atómica (`cancelarReservasAfectadas = true`)**: Si el usuario confirma la cancelación, la creación del bloqueo y la cancelación de las reservas afectadas se ejecutan en **una única transacción de base de datos** serializada mediante un bloqueo consultivo (`pg_advisory_xact_lock`) por espacio. Cada reserva afectada pasa al estado `Cancelada` con el motivo `"Cancelada por bloqueo del espacio: {motivo}"`, se registra la auditoría individual de cada cancelación, se encola una notificación a cada solicitante afectado y se retorna **HTTP 201 Created** con el bloqueo y las reservas canceladas.
+4. **Levantamiento de Bloqueo**: Al eliminar un bloqueo (`DELETE /api/bloqueos/{id}`), el espacio vuelve a estar disponible para el futuro. **Las reservas previamente canceladas NO se restauran automáticamente**, ya que su cancelación fue notificada y consolidada en la bitácora institucional.
 
 ### Política de Zonas Horarias y Persistencia Temporal
 - **Zona Horaria de la Facultad**: `America/Argentina/Buenos_Aires` (UTC-3 / `Argentina Standard Time`).

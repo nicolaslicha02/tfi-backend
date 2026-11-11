@@ -54,4 +54,17 @@ public static class DateTimeZoneHelper
         var utc = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
         return TimeZoneInfo.ConvertTimeFromUtc(utc, FacultadTimeZone);
     }
+
+    /// <summary>
+    /// Normaliza cualquier DateTime (UTC, Local o Unspecified asumido como hora de la Facultad) a DateTimeKind.Utc.
+    /// </summary>
+    public static DateTime NormalizeToUtc(DateTime dateTime)
+    {
+        return dateTime.Kind switch
+        {
+            DateTimeKind.Utc => dateTime,
+            DateTimeKind.Local => dateTime.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeToUtc(dateTime, FacultadTimeZone), DateTimeKind.Utc)
+        };
+    }
 }

@@ -32,7 +32,8 @@ public class DatabaseSeeder
         {
             if (await _context.Roles.AnyAsync())
             {
-                _logger.LogInformation("La base de datos ya contiene datos iniciales. Se omite el seed.");
+                await AsegurarPermisosIncrementalesAsync();
+                _logger.LogInformation("La base de datos ya contiene datos iniciales. Se verificaron permisos incrementales.");
                 return;
             }
 
@@ -79,6 +80,7 @@ public class DatabaseSeeder
                 new() { Codigo = "reservas.ver_pendientes", Descripcion = "Ver solicitudes pendientes de resolución" },
                 new() { Codigo = "reservas.aprobar_rechazar", Descripcion = "Aprobar o rechazar solicitudes de reserva" },
                 new() { Codigo = "reservas.cancelar", Descripcion = "Cancelar solicitudes de reserva activas" },
+                new() { Codigo = "reservas.modificar", Descripcion = "Modificar solicitudes de reserva existentes" },
 
                 new() { Codigo = "bloqueos.ver", Descripcion = "Listar bloqueos de espacios" },
                 new() { Codigo = "bloqueos.crear", Descripcion = "Crear bloqueos por mantenimiento o reformas" },
@@ -93,13 +95,13 @@ public class DatabaseSeeder
 
             // Asignación de permisos a roles
             // Solicitante:
-            AsignarPermisos(rolSolicitante, permisos, "espacios.ver", "reservas.solicitar", "reservas.ver_propias", "reservas.cancelar", "catalogos.ver");
+            AsignarPermisos(rolSolicitante, permisos, "espacios.ver", "reservas.solicitar", "reservas.ver_propias", "reservas.cancelar", "reservas.modificar", "catalogos.ver");
 
             // ResponsableEspacio:
-            AsignarPermisos(rolResponsable, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
+            AsignarPermisos(rolResponsable, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "reservas.modificar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
 
             // SecretariaAcademica:
-            AsignarPermisos(rolSecretaria, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
+            AsignarPermisos(rolSecretaria, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "reservas.modificar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
 
             // Administrador: todos los permisos
             foreach (var permiso in permisos)
@@ -370,6 +372,57 @@ public class DatabaseSeeder
                 RolId = rol.Id,
                 PermisoId = permiso.Id
             });
+        }
+    }
+
+    private async Task AsegurarPermisosIncrementalesAsync()
+    {
+        var permisoModificar = await _context.Permisos.FirstOrDefaultAsync(p => p.Codigo == "reservas.modificar");
+        if (permisoModificar == null)
+        {
+            permisoModificar = new Permiso
+            {
+                Codigo = "reservas.modificar",
+                Descripcion = "Modificar solicitudes de reserva existentes"
+            };
+            _context.Permisos.Add(permisoModificar);
+            await _context.SaveChangesAsync();
+        }
+
+        var roles = await _context.Roles.ToListAsync();
+        var permisosRequeridosPorRol = new Dictionary<string, string[]>
+        {
+            ["Solicitante"] = new[] { "reservas.modificar" },
+            ["ResponsableEspacio"] = new[] { "reservas.modificar" },
+            ["SecretariaAcademica"] = new[] { "reservas.solicitar", "reservas.ver_propias", "reservas.modificar" },
+            ["Administrador"] = new[] { "reservas.modificar" }
+        };
+
+        var todosPermisos = await _context.Permisos.ToListAsync();
+        var rolPermisosExistentes = await _context.RolPermisos.ToListAsync();
+        var huboCambios = false;
+
+        foreach (var rol in roles)
+        {
+            if (!permisosRequeridosPorRol.TryGetValue(rol.Nombre, out var codigos))
+            {
+                continue;
+            }
+
+            foreach (var codigo in codigos)
+            {
+                var perm = todosPermisos.FirstOrDefault(p => p.Codigo == codigo);
+                if (perm != null && !rolPermisosExistentes.Any(rp => rp.RolId == rol.Id && rp.PermisoId == perm.Id))
+                {
+                    _context.RolPermisos.Add(new RolPermiso { RolId = rol.Id, PermisoId = perm.Id });
+                    huboCambios = true;
+                }
+            }
+        }
+
+        if (huboCambios)
+        {
+            await _context.SaveChangesAsync();
         }
     }
 }

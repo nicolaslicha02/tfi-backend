@@ -1,5 +1,6 @@
-using GestionReservas.Domain.Entities;
+﻿using GestionReservas.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace GestionReservas.Application.Common.Interfaces;
 
@@ -8,6 +9,8 @@ namespace GestionReservas.Application.Common.Interfaces;
 /// </summary>
 public interface IApplicationDbContext
 {
+    DatabaseFacade Database { get; }
+
     DbSet<Usuario> Usuarios { get; }
     DbSet<Rol> Roles { get; }
     DbSet<Permiso> Permisos { get; }
@@ -30,5 +33,9 @@ public interface IApplicationDbContext
     DbSet<AsignacionEspacio> AsignacionesEspacio { get; }
     DbSet<HistorialMatricula> HistorialesMatricula { get; }
 
+    /// <summary>Adquiere un advisory lock transaccional (pg_advisory_xact_lock) para serializar operaciones por clave.</summary>
+    Task AcquireAdvisoryXactLockAsync(long key, CancellationToken cancellationToken = default);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
+
