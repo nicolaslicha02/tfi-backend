@@ -284,6 +284,8 @@ public class DatabaseSeeder
             // 7. Usuarios de prueba (1 por rol con contraseñas hasheadas)
             var adminUser = new Usuario
             {
+                Nombre = "Administrador",
+                Apellido = "General",
                 NombreCompleto = "Administrador General",
                 Email = "admin@facultad.edu.ar",
                 PasswordHash = _passwordHasher.HashPassword("Admin123!"),
@@ -293,6 +295,8 @@ public class DatabaseSeeder
 
             var secretariaUser = new Usuario
             {
+                Nombre = "Secretaría",
+                Apellido = "Académica",
                 NombreCompleto = "Secretaría Académica",
                 Email = "secretaria@facultad.edu.ar",
                 PasswordHash = _passwordHasher.HashPassword("Secretaria123!"),
@@ -302,20 +306,26 @@ public class DatabaseSeeder
 
             var responsableUser = new Usuario
             {
+                Nombre = "Carlos",
+                Apellido = "Gutiérrez",
                 NombreCompleto = "Ing. Carlos Gutiérrez (Responsable Sistemas)",
                 Email = "responsable.sistemas@facultad.edu.ar",
                 PasswordHash = _passwordHasher.HashPassword("Responsable123!"),
                 Telefono = "+54 11 4000-0003",
-                Activo = true
+                Activo = true,
+                DepartamentoId = deptoSistemas.Id
             };
 
             var solicitanteUser = new Usuario
             {
+                Nombre = "Martín",
+                Apellido = "Pérez",
                 NombreCompleto = "Prof. Martín Pérez (Docente Solicitante)",
                 Email = "docente.perez@facultad.edu.ar",
                 PasswordHash = _passwordHasher.HashPassword("Docente123!"),
                 Telefono = "+54 11 4000-0004",
-                Activo = true
+                Activo = true,
+                DepartamentoId = deptoBasicas.Id
             };
 
             _context.Usuarios.AddRange(adminUser, secretariaUser, responsableUser, solicitanteUser);

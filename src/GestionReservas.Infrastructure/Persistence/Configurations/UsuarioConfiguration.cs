@@ -12,6 +12,16 @@ public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
 
         builder.HasKey(u => u.Id);
 
+        builder.Property(u => u.Nombre)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasDefaultValue(string.Empty);
+
+        builder.Property(u => u.Apellido)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasDefaultValue(string.Empty);
+
         builder.Property(u => u.NombreCompleto)
             .IsRequired()
             .HasMaxLength(150);
@@ -36,5 +46,10 @@ public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
 
         builder.Property(u => u.FechaCreacion)
             .IsRequired();
+
+        builder.HasOne(u => u.Departamento)
+            .WithMany(d => d.Usuarios)
+            .HasForeignKey(u => u.DepartamentoId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

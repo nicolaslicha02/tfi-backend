@@ -669,6 +669,16 @@ namespace GestionReservas.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<string>("Apellido")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("");
+
+                    b.Property<int?>("DepartamentoId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -676,6 +686,13 @@ namespace GestionReservas.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("FechaCreacion")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("NombreCompleto")
                         .IsRequired()
@@ -692,6 +709,8 @@ namespace GestionReservas.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DepartamentoId");
 
                     b.HasIndex("Email")
                         .IsUnique();
@@ -930,6 +949,16 @@ namespace GestionReservas.Infrastructure.Persistence.Migrations
                     b.Navigation("Rol");
                 });
 
+            modelBuilder.Entity("GestionReservas.Domain.Entities.Usuario", b =>
+                {
+                    b.HasOne("GestionReservas.Domain.Entities.Departamento", "Departamento")
+                        .WithMany("Usuarios")
+                        .HasForeignKey("DepartamentoId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Departamento");
+                });
+
             modelBuilder.Entity("GestionReservas.Domain.Entities.UsuarioRol", b =>
                 {
                     b.HasOne("GestionReservas.Domain.Entities.Rol", "Rol")
@@ -971,6 +1000,8 @@ namespace GestionReservas.Infrastructure.Persistence.Migrations
                     b.Navigation("Espacios");
 
                     b.Navigation("Materias");
+
+                    b.Navigation("Usuarios");
                 });
 
             modelBuilder.Entity("GestionReservas.Domain.Entities.Equipamiento", b =>

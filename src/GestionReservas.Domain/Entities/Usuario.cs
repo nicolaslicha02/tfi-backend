@@ -8,6 +8,16 @@ public class Usuario
     public int Id { get; set; }
 
     /// <summary>
+    /// Nombre de pila del usuario.
+    /// </summary>
+    public string Nombre { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Apellido del usuario.
+    /// </summary>
+    public string Apellido { get; set; } = string.Empty;
+
+    /// <summary>
     /// Nombre y apellido completo del usuario.
     /// </summary>
     public string NombreCompleto { get; set; } = string.Empty;
@@ -31,6 +41,12 @@ public class Usuario
     /// Indica si el usuario se encuentra habilitado para operar en el sistema.
     /// </summary>
     public bool Activo { get; set; } = true;
+
+    /// <summary>
+    /// Departamento o secretaría a la que pertenece el usuario (opcional).
+    /// </summary>
+    public int? DepartamentoId { get; set; }
+    public Departamento? Departamento { get; set; }
 
     /// <summary>
     /// Fecha y hora UTC de registro del usuario.

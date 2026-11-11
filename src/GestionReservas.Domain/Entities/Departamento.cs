@@ -18,6 +18,7 @@ public class Departamento
     public string? Descripcion { get; set; }
 
     // Relaciones
+    public ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
     public ICollection<Espacio> Espacios { get; set; } = new List<Espacio>();
     public ICollection<Materia> Materias { get; set; } = new List<Materia>();
 }

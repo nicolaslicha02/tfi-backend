@@ -11,6 +11,9 @@ namespace GestionReservas.Tests.Infrastructure;
 
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
+    private static readonly object _dbLock = new();
+    private static bool _dbInitialized = false;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -63,15 +66,22 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 });
             });
 
-            // Asegurar que la base de datos de test esté migrada y sembrada
-            var sp = services.BuildServiceProvider();
-            using var scope = sp.CreateScope();
-            var scopedServices = scope.ServiceProvider;
-            var db = scopedServices.GetRequiredService<ApplicationDbContext>();
-            var seeder = scopedServices.GetRequiredService<DatabaseSeeder>();
+            // Asegurar que la base de datos de test esté migrada y sembrada exactamente una vez
+            lock (_dbLock)
+            {
+                if (!_dbInitialized)
+                {
+                    var sp = services.BuildServiceProvider();
+                    using var scope = sp.CreateScope();
+                    var scopedServices = scope.ServiceProvider;
+                    var db = scopedServices.GetRequiredService<ApplicationDbContext>();
+                    var seeder = scopedServices.GetRequiredService<DatabaseSeeder>();
 
-            db.Database.Migrate();
-            seeder.SeedAsync().GetAwaiter().GetResult();
+                    db.Database.Migrate();
+                    seeder.SeedAsync().GetAwaiter().GetResult();
+                    _dbInitialized = true;
+                }
+            }
         });
     }
 }
