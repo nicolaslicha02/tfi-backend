@@ -33,4 +33,20 @@ public class TiposEspacioController : ControllerBase
         var tipos = await _catalogosService.GetTiposEspacioAsync(cancellationToken);
         return Ok(tipos);
     }
+
+    /// <summary>
+    /// Registra un nuevo tipo funcional de espacio físico en el catálogo.
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = "Administrador")]
+    [ProducesResponseType(typeof(TipoEspacioDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<TipoEspacioDto>> Create([FromBody] CrearTipoEspacioRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await _catalogosService.CrearTipoEspacioAsync(request, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
 }

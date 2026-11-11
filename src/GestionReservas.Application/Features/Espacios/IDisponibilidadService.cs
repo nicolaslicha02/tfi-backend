@@ -24,6 +24,16 @@ public interface IDisponibilidadService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Verifica si un espacio físico posee una asignación de cursada académica oficial recurrente superpuesta en el rango solicitado.
+    /// Devuelve la entidad AsignacionEspacio si colisiona; null en caso de encontrarse libre de cursadas oficiales.
+    /// </summary>
+    Task<GestionReservas.Domain.Entities.AsignacionEspacio?> ObtenerAsignacionSuperpuestaAsync(
+        int espacioId,
+        DateTime desdeUtc,
+        DateTime hastaUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Genera la subconsulta IQueryable de identificadores de espacios que NO están disponibles en el rango horario UTC dado.
     /// Esta consulta se compone directamente en la consulta principal de base de datos sin cargar elementos a memoria.
     /// </summary>

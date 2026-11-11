@@ -28,6 +28,7 @@ public class ReservasService : IReservasService
     private readonly IValidator<ActualizarReservaRequestDto> _actualizarValidator;
     private readonly IValidator<CambiarEstadoReservaRequestDto> _cambiarEstadoValidator;
     private readonly IValidator<MisReservasQueryParameters> _misReservasValidator;
+    private readonly IValidator<ReservasQueryParameters> _reservasAdminValidator;
 
     public ReservasService(
         IApplicationDbContext context,
@@ -38,7 +39,8 @@ public class ReservasService : IReservasService
         IValidator<CrearReservaRequestDto> crearValidator,
         IValidator<ActualizarReservaRequestDto> actualizarValidator,
         IValidator<CambiarEstadoReservaRequestDto> cambiarEstadoValidator,
-        IValidator<MisReservasQueryParameters> misReservasValidator)
+        IValidator<MisReservasQueryParameters> misReservasValidator,
+        IValidator<ReservasQueryParameters> reservasAdminValidator)
     {
         _context = context;
         _currentUserService = currentUserService;
@@ -49,6 +51,7 @@ public class ReservasService : IReservasService
         _actualizarValidator = actualizarValidator;
         _cambiarEstadoValidator = cambiarEstadoValidator;
         _misReservasValidator = misReservasValidator;
+        _reservasAdminValidator = reservasAdminValidator;
     }
 
     public async Task<ReservaDetalleDto> CreateReservaAsync(CrearReservaRequestDto request, CancellationToken cancellationToken = default)
@@ -251,6 +254,85 @@ public class ReservasService : IReservasService
         return await ProyectarListado(
                 query.OrderBy(r => r.FechaHoraInicio).ThenBy(r => r.Id))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PagedResultDto<ReservaListadoDto>> GetReservasAdministrativasAsync(
+        ReservasQueryParameters queryParams,
+        CancellationToken cancellationToken = default)
+    {
+        await ValidateAsync(_reservasAdminValidator, queryParams, cancellationToken);
+
+        var usuarioId = _currentUserService.UsuarioId
+            ?? throw new UnauthorizedException("Usuario no autenticado.");
+
+        var esAdminOSecretaria = _currentUserService.IsInRole("Administrador") ||
+                                 _currentUserService.IsInRole("SecretariaAcademica");
+        var esResponsable = _currentUserService.IsInRole("ResponsableEspacio");
+
+        if (!esAdminOSecretaria && !esResponsable)
+        {
+            throw new ForbiddenException("No posee los permisos administrativos necesarios para consultar el listado general de reservas.");
+        }
+
+        var query = _context.Reservas
+            .AsNoTracking()
+            .Include(r => r.Espacio)
+                .ThenInclude(e => e.Departamento)
+            .Include(r => r.Solicitante)
+            .Include(r => r.ResueltoPorUsuario)
+            .AsQueryable();
+
+        if (!esAdminOSecretaria)
+        {
+            var deptoId = await _context.Usuarios
+                .AsNoTracking()
+                .Where(u => u.Id == usuarioId)
+                .Select(u => u.DepartamentoId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (!deptoId.HasValue)
+            {
+                return new PagedResultDto<ReservaListadoDto>(Array.Empty<ReservaListadoDto>(), 0, queryParams.Page, queryParams.PageSize);
+            }
+
+            query = query.Where(r => r.Espacio.DepartamentoId == deptoId.Value);
+        }
+        else if (queryParams.DepartamentoId.HasValue)
+        {
+            query = query.Where(r => r.Espacio.DepartamentoId == queryParams.DepartamentoId.Value);
+        }
+
+        if (queryParams.Estado.HasValue)
+        {
+            query = query.Where(r => r.Estado == queryParams.Estado.Value);
+        }
+
+        if (queryParams.EspacioId.HasValue)
+        {
+            query = query.Where(r => r.EspacioId == queryParams.EspacioId.Value);
+        }
+
+        if (queryParams.Desde.HasValue)
+        {
+            var desdeUtc = DateTimeZoneHelper.NormalizeToUtc(queryParams.Desde.Value);
+            query = query.Where(r => r.FechaHoraFin >= desdeUtc);
+        }
+
+        if (queryParams.Hasta.HasValue)
+        {
+            var hastaUtc = DateTimeZoneHelper.NormalizeToUtc(queryParams.Hasta.Value);
+            query = query.Where(r => r.FechaHoraInicio <= hastaUtc);
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await ProyectarListado(
+                query.OrderByDescending(r => r.FechaHoraInicio).ThenByDescending(r => r.Id)
+                     .Skip((queryParams.Page - 1) * queryParams.PageSize)
+                     .Take(queryParams.PageSize))
+            .ToListAsync(cancellationToken);
+
+        return new PagedResultDto<ReservaListadoDto>(items, total, queryParams.Page, queryParams.PageSize);
     }
 
     public async Task<ReservaDetalleDto> GetReservaByIdAsync(int id, CancellationToken cancellationToken = default)
@@ -652,7 +734,17 @@ public class ReservasService : IReservasService
         int? excluirReservaId,
         CancellationToken cancellationToken)
     {
-        // 1. Verificar explícitamente bloqueos activos en ese rango para dar un mensaje claro de 409
+        // 1. Verificar colisión con asignación de cursada académica oficial
+        var asignacionOficial = await _disponibilidadService.ObtenerAsignacionSuperpuestaAsync(
+            espacioId, inicioUtc, finUtc, cancellationToken);
+
+        if (asignacionOficial != null)
+        {
+            throw new ConflictException(
+                $"El espacio se encuentra ocupado por la cursada oficial: {asignacionOficial.Comision.Cursada.Materia.Nombre} - Comisión {asignacionOficial.Comision.Codigo}.");
+        }
+
+        // 2. Verificar explícitamente bloqueos activos en ese rango para dar un mensaje claro de 409
         var bloqueoConflicto = await _context.Bloqueos
             .AsNoTracking()
             .Where(b => b.EspacioId == espacioId &&
@@ -667,7 +759,7 @@ public class ReservasService : IReservasService
                 $"El espacio posee un bloqueo institucional en el horario solicitado (Motivo: {bloqueoConflicto.Motivo}).");
         }
 
-        // 2. Verificar disponibilidad general (reservas aprobadas superpuestas y estado del espacio) mediante IDisponibilidadService
+        // 3. Verificar disponibilidad general (reservas aprobadas superpuestas y estado del espacio) mediante IDisponibilidadService
         var disponible = await _disponibilidadService.EstaDisponibleAsync(
             espacioId,
             inicioUtc,

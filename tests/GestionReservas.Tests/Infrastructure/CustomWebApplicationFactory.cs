@@ -75,6 +75,15 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
                     db.Database.Migrate();
                     seeder.SeedAsync().GetAwaiter().GetResult();
+
+                    // Limpieza preventiva de equipamientos de prueba para mantener inalterado el conteo del seed (8)
+                    var equipamientosPrueba = db.Equipamientos.Where(e => e.Nombre.StartsWith("Equipamiento Test")).ToList();
+                    if (equipamientosPrueba.Any())
+                    {
+                        db.Equipamientos.RemoveRange(equipamientosPrueba);
+                        db.SaveChanges();
+                    }
+
                     _dbInitialized = true;
                 }
             }

@@ -33,4 +33,20 @@ public class EquipamientosController : ControllerBase
         var equipamientos = await _catalogosService.GetEquipamientosAsync(cancellationToken);
         return Ok(equipamientos);
     }
+
+    /// <summary>
+    /// Registra un nuevo equipamiento en el catálogo del sistema.
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = "Administrador")]
+    [ProducesResponseType(typeof(EquipamientoDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<EquipamientoDto>> Create([FromBody] CrearEquipamientoRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await _catalogosService.CrearEquipamientoAsync(request, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
 }

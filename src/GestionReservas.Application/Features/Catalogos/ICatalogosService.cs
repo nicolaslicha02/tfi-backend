@@ -21,4 +21,19 @@ public interface ICatalogosService
     /// Obtiene los tipos y clasificaciones funcionales de espacios físicos.
     /// </summary>
     Task<IReadOnlyList<TipoEspacioDto>> GetTiposEspacioAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Obtiene los roles de usuario definidos en el sistema.
+    /// </summary>
+    Task<IReadOnlyList<RolDto>> GetRolesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registra un nuevo equipamiento en el catálogo tecnológico.
+    /// </summary>
+    Task<EquipamientoDto> CrearEquipamientoAsync(CrearEquipamientoRequestDto request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registra un nuevo tipo funcional de espacio físico en el catálogo.
+    /// </summary>
+    Task<TipoEspacioDto> CrearTipoEspacioAsync(CrearTipoEspacioRequestDto request, CancellationToken cancellationToken = default);
 }

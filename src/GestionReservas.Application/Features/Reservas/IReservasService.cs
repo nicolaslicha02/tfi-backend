@@ -43,5 +43,11 @@ public interface IReservasService
     /// Modifica los datos de una reserva existente (PUT). Si estaba Aprobada, vuelve a PendienteAprobacion y revalida todo.
     /// </summary>
     Task<ReservaDetalleDto> UpdateReservaAsync(int id, ActualizarReservaRequestDto request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Obtiene el listado administrativo general de reservas con paginación y filtros opcionales,
+    /// respetando el alcance departamental (Admin/Secretaría ven todas; Responsable solo su departamento).
+    /// </summary>
+    Task<PagedResultDto<ReservaListadoDto>> GetReservasAdministrativasAsync(ReservasQueryParameters queryParams, CancellationToken cancellationToken = default);
 }
 

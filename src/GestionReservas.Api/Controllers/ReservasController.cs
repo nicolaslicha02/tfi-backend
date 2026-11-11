@@ -38,6 +38,14 @@ public class ReservasController : ControllerBase
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> MisReservas([FromQuery] MisReservasQueryParameters query, CancellationToken ct)
         => Ok(await _reservasService.GetMisReservasAsync(query, ct));
 
+    /// <summary>Listado administrativo general de reservas con filtros y alcance departamental.</summary>
+    [HttpGet("api/reservas")]
+    [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
+    [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> GetReservas([FromQuery] ReservasQueryParameters query, CancellationToken ct)
+        => Ok(await _reservasService.GetReservasAdministrativasAsync(query, ct));
+
     /// <summary>Solicitudes pendientes de aprobación.</summary>
     [HttpGet("api/reservas/pendientes")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]

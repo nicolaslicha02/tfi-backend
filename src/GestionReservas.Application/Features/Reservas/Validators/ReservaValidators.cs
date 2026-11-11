@@ -190,3 +190,22 @@ public class MisReservasQueryValidator : AbstractValidator<MisReservasQueryParam
             .WithMessage("El estado de filtro especificado no es válido.");
     }
 }
+
+/// <summary>
+/// Validador para parámetros de consulta del listado administrativo general de reservas.
+/// </summary>
+public class ReservasQueryParametersValidator : AbstractValidator<ReservasQueryParameters>
+{
+    public ReservasQueryParametersValidator()
+    {
+        RuleFor(x => x.Page)
+            .GreaterThanOrEqualTo(1).WithMessage("El número de página debe ser mayor o igual a 1.");
+
+        RuleFor(x => x.PageSize)
+            .InclusiveBetween(1, 100).WithMessage("El tamaño de página debe estar entre 1 y 100.");
+
+        RuleFor(x => x.Estado)
+            .IsInEnum().When(x => x.Estado.HasValue)
+            .WithMessage("El estado de filtro especificado no es válido.");
+    }
+}

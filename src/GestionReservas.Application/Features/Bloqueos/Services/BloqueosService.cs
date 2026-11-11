@@ -22,6 +22,7 @@ public class BloqueosService : IBloqueosService
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
     private readonly IEspacioAuthorizationService _espacioAuthService;
+    private readonly IDisponibilidadService _disponibilidadService;
     private readonly INotificacionesService _notificacionesService;
     private readonly IValidator<CrearBloqueoRequestDto> _crearValidator;
     private readonly IValidator<BloqueosQueryParameters> _queryParamsValidator;
@@ -30,6 +31,7 @@ public class BloqueosService : IBloqueosService
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
         IEspacioAuthorizationService espacioAuthService,
+        IDisponibilidadService disponibilidadService,
         INotificacionesService notificacionesService,
         IValidator<CrearBloqueoRequestDto> crearValidator,
         IValidator<BloqueosQueryParameters> queryParamsValidator)
@@ -37,6 +39,7 @@ public class BloqueosService : IBloqueosService
         _context = context;
         _currentUserService = currentUserService;
         _espacioAuthService = espacioAuthService;
+        _disponibilidadService = disponibilidadService;
         _notificacionesService = notificacionesService;
         _crearValidator = crearValidator;
         _queryParamsValidator = queryParamsValidator;
@@ -86,6 +89,16 @@ public class BloqueosService : IBloqueosService
             if (bloqueoSuperpuesto)
             {
                 throw new ConflictException("El espacio ya posee un bloqueo registrado que se superpone con el período indicado.");
+            }
+
+            // 4.1 Validar colisión con cursada académica oficial
+            var asignacionOficial = await _disponibilidadService.ObtenerAsignacionSuperpuestaAsync(
+                espacio.Id, desdeUtc, hastaUtc, cancellationToken);
+
+            if (asignacionOficial != null)
+            {
+                throw new ConflictException(
+                    $"El espacio se encuentra ocupado por la cursada oficial: {asignacionOficial.Comision.Cursada.Materia.Nombre} - Comisión {asignacionOficial.Comision.Codigo}.");
             }
 
             // 5. Detectar reservas afectadas (APROBADAS o PENDIENTES que se superponen con el rango)

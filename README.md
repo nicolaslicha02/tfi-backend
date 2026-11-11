@@ -109,10 +109,13 @@ Si no se configura User Secrets, el sistema cuenta con un fallback seguro para e
 - `POST /api/auth/login`: Autenticación con email y contraseña, retorno de JWT con claims de roles y permisos.
 - `GET /api/auth/me`: Consulta de datos, roles, permisos y departamento del usuario autenticado.
 
-### Catálogos del Sistema (`/api/departamentos`, `/api/equipamientos`, `/api/tipos-espacio`)
+### Catálogos del Sistema y Roles (`/api/departamentos`, `/api/equipamientos`, `/api/tipos-espacio`, `/api/roles`)
 - `GET /api/departamentos`: Lista de departamentos y secretarías institucionales (`[Authorize]`).
 - `GET /api/equipamientos`: Catálogo flexible de equipamientos tecnológicos (`[Authorize]`).
+- `POST /api/equipamientos`: Alta administrativa de nuevo equipamiento con validación de nombre único y auditoría (`[Authorize(Roles = "Administrador")]`).
 - `GET /api/tipos-espacio`: Clasificación funcional de espacios físicos (`[Authorize]`).
+- `POST /api/tipos-espacio`: Alta administrativa de tipología de espacio físico con validación de unicidad y auditoría (`[Authorize(Roles = "Administrador")]`).
+- `GET /api/roles`: Listado de roles disponibles en el sistema con sus identificadores para selectores del frontend (`[Authorize]`).
 
 ### Gestión de Usuarios (`/api/usuarios`)
 - `POST /api/usuarios`: Alta de usuario con validación de política de contraseñas, email único y asignación de roles y departamento.
@@ -129,7 +132,8 @@ Si no se configura User Secrets, el sistema cuenta con un fallback seguro para e
 - `GET /api/espacios/disponibles`: Búsqueda de espacios disponibles en una fecha y franja horaria determinadas con filtros de capacidad mínima y equipamientos requeridos.
 
 ### Gestión de Reservas y Notificaciones (`/api/reservas`, `/api/mis-reservas`, `/api/notificaciones`)
-- `POST /api/reservas`: Solicitud de reserva con control de disponibilidad, capacidad, equipamiento y bloqueos. Auto-aprobada si el solicitante es Responsable del departamento, Secretaría o Administrador.
+- `POST /api/reservas`: Solicitud de reserva con control de disponibilidad (reservas aprobadas, bloqueos y ocupación académica oficial `AsignacionEspacio`), capacidad y equipamiento. Auto-aprobada si el solicitante administra el departamento del espacio.
+- `GET /api/reservas`: Listado administrativo general de reservas con paginación y filtros (`estado`, `espacioId`, `departamentoId`, `desde`, `hasta`) respetando alcance departamental (Admin y Secretaría ven todas; Responsable solo de su departamento).
 - `GET /api/mis-reservas`: Reservas del usuario autenticado con filtros por estado y rango de fechas.
 - `GET /api/reservas/pendientes`: Solicitudes pendientes de revisión (Responsable ve su departamento; Secretaría y Admin ven todas).
 - `GET /api/reservas/canceladas` y `GET /api/reservas/rechazadas`: Reservas canceladas o rechazadas.

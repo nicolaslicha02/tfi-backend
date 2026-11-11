@@ -33,7 +33,8 @@ public class DatabaseSeeder
             if (await _context.Roles.AnyAsync())
             {
                 await AsegurarPermisosIncrementalesAsync();
-                _logger.LogInformation("La base de datos ya contiene datos iniciales. Se verificaron permisos incrementales.");
+                await AsegurarDatosAcademicosAsync();
+                _logger.LogInformation("La base de datos ya contiene datos iniciales. Se verificaron permisos y estructura académica.");
                 return;
             }
 
@@ -353,6 +354,7 @@ public class DatabaseSeeder
             });
 
             await _context.SaveChangesAsync();
+            await AsegurarDatosAcademicosAsync();
             _logger.LogInformation("Sembrado de datos iniciales completado con éxito.");
         }
         catch (Exception ex)
@@ -424,5 +426,122 @@ public class DatabaseSeeder
         {
             await _context.SaveChangesAsync();
         }
+    }
+
+    private async Task AsegurarDatosAcademicosAsync()
+    {
+        if (await _context.CiclosLectivos.AnyAsync())
+        {
+            return;
+        }
+
+        _logger.LogInformation("Sembrando estructura académica inicial (Ciclo Lectivo, Materias, Cursadas, Comisiones y Asignaciones)...");
+
+        // 1. Ciclo Lectivo 2026
+        var ciclo2026 = new CicloLectivo
+        {
+            Anio = 2026,
+            Nombre = "Ciclo Lectivo 2026",
+            FechaInicio = DateTime.SpecifyKind(new DateTime(2026, 3, 1), DateTimeKind.Utc),
+            FechaFin = DateTime.SpecifyKind(new DateTime(2026, 11, 30, 23, 59, 59), DateTimeKind.Utc),
+            Activo = true
+        };
+        _context.CiclosLectivos.Add(ciclo2026);
+        await _context.SaveChangesAsync();
+
+        // 2. Departamentos base
+        var deptoSistemas = await _context.Departamentos.FirstOrDefaultAsync(d => d.Nombre.Contains("Sistemas"))
+            ?? await _context.Departamentos.FirstAsync();
+        var deptoBasicas = await _context.Departamentos.FirstOrDefaultAsync(d => d.Nombre.Contains("Básicas"))
+            ?? await _context.Departamentos.FirstAsync();
+
+        // 3. Materias
+        var matSistemas = new Materia
+        {
+            Codigo = "SO-01",
+            Nombre = "Sistemas Operativos",
+            DepartamentoId = deptoSistemas.Id
+        };
+
+        var matAlgebra = new Materia
+        {
+            Codigo = "AGA-01",
+            Nombre = "Álgebra y Geometría Analítica",
+            DepartamentoId = deptoBasicas.Id
+        };
+
+        _context.Materias.AddRange(matSistemas, matAlgebra);
+        await _context.SaveChangesAsync();
+
+        // 4. Cursadas
+        var cursadaSistemas = new Cursada
+        {
+            MateriaId = matSistemas.Id,
+            CicloLectivoId = ciclo2026.Id,
+            Periodo = "1er Cuatrimestre"
+        };
+
+        var cursadaAlgebra = new Cursada
+        {
+            MateriaId = matAlgebra.Id,
+            CicloLectivoId = ciclo2026.Id,
+            Periodo = "1er Cuatrimestre"
+        };
+
+        _context.Cursadas.AddRange(cursadaSistemas, cursadaAlgebra);
+        await _context.SaveChangesAsync();
+
+        // 5. Comisiones
+        var comisionK2051 = new Comision
+        {
+            CursadaId = cursadaSistemas.Id,
+            Codigo = "K2051",
+            Turno = "Noche",
+            CantidadInscriptos = 30
+        };
+
+        var comisionA1011 = new Comision
+        {
+            CursadaId = cursadaAlgebra.Id,
+            Codigo = "A1011",
+            Turno = "Noche",
+            CantidadInscriptos = 45
+        };
+
+        _context.Comisiones.AddRange(comisionK2051, comisionA1011);
+        await _context.SaveChangesAsync();
+
+        // 6. Asignaciones de Espacio
+        // AULA-101: Martes de 18:00 a 21:00 (Álgebra y Geometría Analítica - Comisión A1011)
+        // LAB-SIS-01: Jueves de 14:00 a 17:00 (Sistemas Operativos - Comisión K2051)
+        var aula101 = await _context.Espacios.FirstOrDefaultAsync(e => e.Codigo == "AULA-101");
+        var labSis01 = await _context.Espacios.FirstOrDefaultAsync(e => e.Codigo == "LAB-SIS-01");
+
+        if (aula101 != null)
+        {
+            _context.AsignacionesEspacio.Add(new AsignacionEspacio
+            {
+                ComisionId = comisionA1011.Id,
+                EspacioId = aula101.Id,
+                DiaSemana = DayOfWeek.Tuesday,
+                HoraInicio = new TimeSpan(18, 0, 0),
+                HoraFin = new TimeSpan(21, 0, 0)
+            });
+        }
+
+        if (labSis01 != null)
+        {
+            _context.AsignacionesEspacio.Add(new AsignacionEspacio
+            {
+                ComisionId = comisionK2051.Id,
+                EspacioId = labSis01.Id,
+                DiaSemana = DayOfWeek.Thursday,
+                HoraInicio = new TimeSpan(14, 0, 0),
+                HoraFin = new TimeSpan(17, 0, 0)
+            });
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Estructura académica sembrada exitosamente.");
     }
 }
