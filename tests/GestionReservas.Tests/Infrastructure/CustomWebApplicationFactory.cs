@@ -1,4 +1,4 @@
-﻿using GestionReservas.Infrastructure.Persistence;
+using GestionReservas.Infrastructure.Persistence;
 using GestionReservas.Infrastructure.Persistence.Seed;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using GestionReservas.Application.Common.Exceptions;
 using GestionReservas.Application.Common.Helpers;
 using GestionReservas.Application.Common.Interfaces;
