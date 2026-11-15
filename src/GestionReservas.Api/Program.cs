@@ -24,6 +24,32 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
+// Configuración de CORS desde Cors:AllowedOrigins (con orígenes por defecto en Development)
+const string corsPolicyName = "DefaultCorsPolicy";
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if ((allowedOrigins == null || allowedOrigins.Length == 0) && builder.Environment.IsDevelopment())
+{
+    allowedOrigins =
+    [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:4200"
+    ];
+}
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(corsPolicyName, policy =>
+    {
+        if (allowedOrigins is { Length: > 0 })
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+    });
+});
+
 // 3. Swagger / OpenAPI con Swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -95,6 +121,8 @@ app.UseSwaggerUI(c =>
 app.UseHttpsRedirection();
 
 app.UseRouting();
+
+app.UseCors(corsPolicyName);
 
 // 6. Autenticación y Autorización
 app.UseAuthentication();
