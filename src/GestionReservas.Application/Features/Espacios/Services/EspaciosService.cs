@@ -406,6 +406,9 @@ public class EspaciosService : IEspaciosService
         // 1. Autorización sobre el espacio
         await _authService.ValidarPuedeAdministrarEspacioAsync(espacio, cancellationToken);
 
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await _context.AcquireAdvisoryXactLockAsync(espacio.Id, cancellationToken);
+
         // 2. Regla: no permitir baja si tiene reservas futuras APROBADAS o PENDIENTES
         var nowUtc = DateTime.UtcNow;
         var reservasFuturas = await _context.Reservas
@@ -441,6 +444,7 @@ public class EspaciosService : IEspaciosService
 
         _context.Auditorias.Add(auditoria);
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<EspacioListadoDto>> GetEspaciosDisponiblesAsync(DisponibilidadEspacioQueryParameters parameters, CancellationToken cancellationToken = default)

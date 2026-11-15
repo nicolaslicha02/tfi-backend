@@ -267,4 +267,39 @@ public class ReservasEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Contains(page!.Items, x => x.Id == propia.Id);
         Assert.DoesNotContain(page.Items, x => x.Id == ajena.Id);
     }
+
+    [Fact]
+    public async Task Aprobar_ReservaEnElPasado_Devuelve409Conflict()
+    {
+        var espacioId = await CrearEspacioAsync();
+        int reservaPasadaId;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var solicitante = await db.Usuarios.FirstAsync(u => u.Email == "docente.perez@facultad.edu.ar");
+
+            var reservaPasada = new Reserva
+            {
+                SolicitanteId = solicitante.Id,
+                EspacioId = espacioId,
+                FechaHoraInicio = DateTime.UtcNow.AddHours(-4),
+                FechaHoraFin = DateTime.UtcNow.AddHours(-2),
+                TipoActividad = TipoActividad.Clase,
+                AsistentesEstimados = 10,
+                Motivo = "Reserva vencida sin resolver",
+                Estado = EstadoReserva.PendienteAprobacion,
+                FechaSolicitud = DateTime.UtcNow.AddDays(-1)
+            };
+
+            db.Reservas.Add(reservaPasada);
+            await db.SaveChangesAsync();
+            reservaPasadaId = reservaPasada.Id;
+        }
+
+        var admin = await AdminAsync();
+        var r = await SendAsync(admin, new HttpMethod("PATCH"), $"/api/reservas/{reservaPasadaId}", new { accion = "aprobar" });
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+    }
 }

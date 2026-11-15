@@ -77,11 +77,8 @@ public class ReservasService : IReservasService
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            if (autoAprobar)
-            {
-                // Bloqueo transaccional por espacio en PostgreSQL para evitar aprobaciones concurrentes solapadas
-                await _context.AcquireAdvisoryXactLockAsync(espacio.Id, cancellationToken);
-            }
+            // Bloqueo transaccional por espacio en PostgreSQL para evitar carreras contra bloqueos, bajas o aprobaciones concurrentes
+            await _context.AcquireAdvisoryXactLockAsync(espacio.Id, cancellationToken);
 
             await ValidarSinBloqueosNiSuperposicionAprobadaAsync(
                 espacio.Id,
@@ -462,9 +459,14 @@ public class ReservasService : IReservasService
                 throw new ValidationException("Motivo", $"Es obligatorio especificar un motivo para {accionTexto}.");
             }
 
-            // 4. Si se aprueba, revalidar que el espacio siga disponible y sin bloqueos ni otra reserva aprobada superpuesta
+            // 4. Si se aprueba, revalidar que no esté en el pasado y que el espacio siga disponible y sin bloqueos ni otra reserva aprobada superpuesta
             if (nuevoEstado == EstadoReserva.Aprobada)
             {
+                if (reserva.FechaHoraInicio <= DateTime.UtcNow)
+                {
+                    throw new ConflictException("No se puede aprobar una reserva cuya fecha y hora de inicio ya ha pasado.");
+                }
+
                 if (reserva.Espacio.FechaBaja != null || reserva.Espacio.Estado == EstadoEspacio.FueraDeServicio)
                 {
                     throw new ConflictException($"El espacio '{reserva.Espacio.Codigo}' no se encuentra disponible para aprobar reservas.");
@@ -581,82 +583,87 @@ public class ReservasService : IReservasService
         var inicioUtc = DateTimeZoneHelper.NormalizeToUtc(request.FechaHoraInicio);
         var finUtc = DateTimeZoneHelper.NormalizeToUtc(request.FechaHoraFin);
 
-        // Revalidar espacio, capacidad y equipamiento
-        await ObtenerYValidarEspacioCapacidadYEquipamientoAsync(
-            reserva.EspacioId,
-            request.AsistentesEstimados,
-            request.EquipamientoRequerido,
-            cancellationToken);
-
-        // Revalidar bloqueos y superposición con reservas aprobadas (excluyendo la propia reserva)
-        await ValidarSinBloqueosNiSuperposicionAprobadaAsync(
-            reserva.EspacioId,
-            inicioUtc,
-            finUtc,
-            excluirReservaId: reserva.Id,
-            cancellationToken);
-
-        reserva.FechaHoraInicio = inicioUtc;
-        reserva.FechaHoraFin = finUtc;
-        reserva.TipoActividad = request.TipoActividad;
-        reserva.AsistentesEstimados = request.AsistentesEstimados;
-        reserva.Motivo = request.Motivo.Trim();
-        reserva.Observaciones = string.IsNullOrWhiteSpace(request.Observaciones) ? null : request.Observaciones.Trim();
-        reserva.Estado = nuevoEstado;
-        reserva.ResueltoPorUsuarioId = null;
-        reserva.FechaResolucion = null;
-        reserva.MotivoRechazo = null;
-
-        // Reemplazar equipamiento requerido
-        _context.ReservasEquipamiento.RemoveRange(reserva.EquipamientosRequeridos);
-        reserva.EquipamientosRequeridos.Clear();
-
-        foreach (var eq in request.EquipamientoRequerido)
-        {
-            reserva.EquipamientosRequeridos.Add(new ReservaEquipamiento
-            {
-                ReservaId = reserva.Id,
-                EquipamientoId = eq.EquipamientoId,
-                CantidadRequerida = eq.Cantidad,
-                Observaciones = string.IsNullOrWhiteSpace(eq.Observaciones) ? null : eq.Observaciones.Trim()
-            });
-        }
-
-        _context.Auditorias.Add(new Auditoria
-        {
-            UsuarioId = usuarioId,
-            FechaHora = DateTime.UtcNow,
-            Accion = "ModificarReserva",
-            Entidad = "Reserva",
-            EntidadId = reserva.Id.ToString(),
-            Motivo = reserva.Motivo,
-            Detalle = estadoAnterior == EstadoReserva.Aprobada
-                ? $"Reserva modificada: pasó de '{estadoAnterior}' a '{nuevoEstado}' para revalidación ({inicioUtc:yyyy-MM-dd HH:mm} a {finUtc:yyyy-MM-dd HH:mm} UTC)."
-                : $"Reserva en estado '{estadoAnterior}' actualizada ({inicioUtc:yyyy-MM-dd HH:mm} a {finUtc:yyyy-MM-dd HH:mm} UTC)."
-        });
-
-        _notificacionesService.EncolarNotificacion(
-            reserva.SolicitanteId,
-            estadoAnterior == EstadoReserva.Aprobada
-                ? $"Su reserva #{reserva.Id} para el espacio '{reserva.Espacio.Codigo}' fue modificada y volvió al estado PENDIENTE DE APROBACIÓN."
-                : $"Su reserva #{reserva.Id} para el espacio '{reserva.Espacio.Codigo}' fue actualizada correctamente.");
-
-        await _notificacionesService.EncolarNotificacionResponsablesDepartamentoAsync(
-            reserva.Espacio.DepartamentoId,
-            $"La reserva #{reserva.Id} del espacio '{reserva.Espacio.Codigo}' fue modificada y se encuentra pendiente de aprobación.",
-            excluirUsuarioId: usuarioId,
-            cancellationToken);
-
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            await _context.AcquireAdvisoryXactLockAsync(reserva.Espacio.Id, cancellationToken);
+
+            // Revalidar espacio, capacidad y equipamiento
+            await ObtenerYValidarEspacioCapacidadYEquipamientoAsync(
+                reserva.EspacioId,
+                request.AsistentesEstimados,
+                request.EquipamientoRequerido,
+                cancellationToken);
+
+            // Revalidar bloqueos y superposición con reservas aprobadas (excluyendo la propia reserva)
+            await ValidarSinBloqueosNiSuperposicionAprobadaAsync(
+                reserva.EspacioId,
+                inicioUtc,
+                finUtc,
+                excluirReservaId: reserva.Id,
+                cancellationToken);
+
+            reserva.FechaHoraInicio = inicioUtc;
+            reserva.FechaHoraFin = finUtc;
+            reserva.TipoActividad = request.TipoActividad;
+            reserva.AsistentesEstimados = request.AsistentesEstimados;
+            reserva.Motivo = request.Motivo.Trim();
+            reserva.Observaciones = string.IsNullOrWhiteSpace(request.Observaciones) ? null : request.Observaciones.Trim();
+            reserva.Estado = nuevoEstado;
+            reserva.ResueltoPorUsuarioId = null;
+            reserva.FechaResolucion = null;
+            reserva.MotivoRechazo = null;
+
+            // Reemplazar equipamiento requerido
+            _context.ReservasEquipamiento.RemoveRange(reserva.EquipamientosRequeridos);
+            reserva.EquipamientosRequeridos.Clear();
+
+            foreach (var eq in request.EquipamientoRequerido)
+            {
+                reserva.EquipamientosRequeridos.Add(new ReservaEquipamiento
+                {
+                    ReservaId = reserva.Id,
+                    EquipamientoId = eq.EquipamientoId,
+                    CantidadRequerida = eq.Cantidad,
+                    Observaciones = string.IsNullOrWhiteSpace(eq.Observaciones) ? null : eq.Observaciones.Trim()
+                });
+            }
+
+            _context.Auditorias.Add(new Auditoria
+            {
+                UsuarioId = usuarioId,
+                FechaHora = DateTime.UtcNow,
+                Accion = "ModificarReserva",
+                Entidad = "Reserva",
+                EntidadId = reserva.Id.ToString(),
+                Motivo = reserva.Motivo,
+                Detalle = estadoAnterior == EstadoReserva.Aprobada
+                    ? $"Reserva modificada: pasó de '{estadoAnterior}' a '{nuevoEstado}' para revalidación ({inicioUtc:yyyy-MM-dd HH:mm} a {finUtc:yyyy-MM-dd HH:mm} UTC)."
+                    : $"Reserva en estado '{estadoAnterior}' actualizada ({inicioUtc:yyyy-MM-dd HH:mm} a {finUtc:yyyy-MM-dd HH:mm} UTC)."
+            });
+
+            _notificacionesService.EncolarNotificacion(
+                reserva.SolicitanteId,
+                estadoAnterior == EstadoReserva.Aprobada
+                    ? $"Su reserva #{reserva.Id} para el espacio '{reserva.Espacio.Codigo}' fue modificada y volvió al estado PENDIENTE DE APROBACIÓN."
+                    : $"Su reserva #{reserva.Id} para el espacio '{reserva.Espacio.Codigo}' fue actualizada correctamente.");
+
+            await _notificacionesService.EncolarNotificacionResponsablesDepartamentoAsync(
+                reserva.Espacio.DepartamentoId,
+                $"La reserva #{reserva.Id} del espacio '{reserva.Espacio.Codigo}' fue modificada y se encuentra pendiente de aprobación.",
+                excluirUsuarioId: usuarioId,
+                cancellationToken);
+
             await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return await ConstruirDetalleReservaAsync(reserva.Id, cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
+            await transaction.RollbackAsync(cancellationToken);
             throw new ConflictException("La reserva fue modificada simultáneamente por otro usuario. Recargue e intente nuevamente.");
         }
-
-        return await ConstruirDetalleReservaAsync(reserva.Id, cancellationToken);
     }
 
     private async Task<Espacio> ObtenerYValidarEspacioCapacidadYEquipamientoAsync(
