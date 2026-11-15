@@ -383,11 +383,11 @@ public class EspaciosEndpointsTests : IClassFixture<CustomWebApplicationFactory>
     [Fact]
     public async Task Disponibles_ConCapacidadYEquipamiento_FiltraAdecuadamente()
     {
-        // Arrange: Pedimos para 60 personas + Proyector (eq 1) el próximo martes de 18:00 a 21:00
+        // Arrange: Pedimos para 60 personas + Proyector (eq 1) un miércoles fijo (sin cursada oficial en AULA-101) de 18:00 a 21:00
         var token = await ObtenerTokenAsync("docente.perez@facultad.edu.ar", "Docente123!");
 
-        // Próximo martes a las 18:00
-        var fecha = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7));
+        // Miércoles 25 de noviembre de 2026 (evita colisión con la cursada de los martes en AULA-101)
+        var fecha = new DateOnly(2026, 11, 25);
         var horaInicio = "18:00";
         var horaFin = "21:00";
 
