@@ -5,9 +5,14 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using GestionReservas.Application.Common.Interfaces;
 using GestionReservas.Application.Features.Auth.DTOs;
+using GestionReservas.Domain.Entities;
+using GestionReservas.Infrastructure.Persistence;
 using GestionReservas.Tests.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
 namespace GestionReservas.Tests;
@@ -180,6 +185,77 @@ public class AuthEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Contains("Administrador", profile.Roles);
         Assert.NotEmpty(profile.Permisos);
         Assert.True(profile.Permisos.Count >= 10);
+    }
+
+    [Fact]
+    public async Task GetCurrentUser_DevuelveDepartamentoRealYNullParaSolicitanteSinDepartamento()
+    {
+        // 1. Verificar departamento real de responsable.sistemas@facultad.edu.ar
+        var loginResp = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequestDto
+        {
+            Email = "responsable.sistemas@facultad.edu.ar",
+            Password = "Responsable123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginResp.StatusCode);
+        var loginRespData = await loginResp.Content.ReadFromJsonAsync<LoginResponseDto>();
+        Assert.NotNull(loginRespData);
+
+        var meRespReq = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        meRespReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginRespData.Token);
+        var meRespRes = await _client.SendAsync(meRespReq);
+        Assert.Equal(HttpStatusCode.OK, meRespRes.StatusCode);
+
+        var respProfile = await meRespRes.Content.ReadFromJsonAsync<CurrentUserProfileDto>();
+        Assert.NotNull(respProfile);
+        Assert.NotNull(respProfile.Departamento);
+        Assert.Contains("Sistemas", respProfile.Departamento.Nombre);
+
+        // 2. Verificar que un Solicitante con DepartamentoId = null devuelva Departamento == null
+        var emailSolicitante = $"solicitante.sindepto.{Guid.NewGuid():N}@facultad.edu.ar";
+        const string passwordSolicitante = "Solicitante123!";
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+            var rolSolicitante = await db.Roles.FirstAsync(r => r.Nombre == "Solicitante");
+
+            var nuevoSolicitante = new Usuario
+            {
+                NombreCompleto = "Solicitante Sin Departamento",
+                Email = emailSolicitante,
+                PasswordHash = hasher.HashPassword(passwordSolicitante),
+                Activo = true,
+                DepartamentoId = null,
+                FechaCreacion = DateTime.UtcNow
+            };
+            db.Usuarios.Add(nuevoSolicitante);
+            await db.SaveChangesAsync();
+
+            db.UsuarioRoles.Add(new UsuarioRol
+            {
+                UsuarioId = nuevoSolicitante.Id,
+                RolId = rolSolicitante.Id
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var loginSol = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequestDto
+        {
+            Email = emailSolicitante,
+            Password = passwordSolicitante
+        });
+        Assert.Equal(HttpStatusCode.OK, loginSol.StatusCode);
+        var loginSolData = await loginSol.Content.ReadFromJsonAsync<LoginResponseDto>();
+        Assert.NotNull(loginSolData);
+
+        var meSolReq = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        meSolReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginSolData.Token);
+        var meSolRes = await _client.SendAsync(meSolReq);
+        Assert.Equal(HttpStatusCode.OK, meSolRes.StatusCode);
+
+        var solProfile = await meSolRes.Content.ReadFromJsonAsync<CurrentUserProfileDto>();
+        Assert.NotNull(solProfile);
+        Assert.Null(solProfile.Departamento);
     }
 
     private static string GenerarTokenExpirado()

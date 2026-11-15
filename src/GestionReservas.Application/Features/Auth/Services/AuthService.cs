@@ -145,6 +145,7 @@ public class AuthService : IAuthService
         CancellationToken cancellationToken = default)
     {
         var usuario = await _context.Usuarios
+            .Include(u => u.Departamento)
             .Include(u => u.UsuarioRoles)
                 .ThenInclude(ur => ur.Rol)
                     .ThenInclude(r => r.RolPermisos)
@@ -167,38 +168,14 @@ public class AuthService : IAuthService
             .Distinct()
             .ToList();
 
-        // Determinar departamento asociado (ej. para responsables o docentes de departamento)
-        DepartamentoSimpleDto? departamentoDto = null;
-        if (roles.Contains("ResponsableEspacio") || usuario.Email.Contains("sistemas"))
-        {
-            var depto = await _context.Departamentos
-                .FirstOrDefaultAsync(d => d.Nombre.Contains("Sistemas"), cancellationToken);
-
-            if (depto != null)
+        var departamentoDto = usuario.Departamento == null
+            ? null
+            : new DepartamentoSimpleDto
             {
-                departamentoDto = new DepartamentoSimpleDto
-                {
-                    Id = depto.Id,
-                    Nombre = depto.Nombre,
-                    Descripcion = depto.Descripcion
-                };
-            }
-        }
-        else if (roles.Contains("SecretariaAcademica") || usuario.Email.Contains("secretaria"))
-        {
-            var depto = await _context.Departamentos
-                .FirstOrDefaultAsync(d => d.Nombre.Contains("Secretaría Académica"), cancellationToken);
-
-            if (depto != null)
-            {
-                departamentoDto = new DepartamentoSimpleDto
-                {
-                    Id = depto.Id,
-                    Nombre = depto.Nombre,
-                    Descripcion = depto.Descripcion
-                };
-            }
-        }
+                Id = usuario.Departamento.Id,
+                Nombre = usuario.Departamento.Nombre,
+                Descripcion = usuario.Departamento.Descripcion
+            };
 
         return new CurrentUserProfileDto
         {
