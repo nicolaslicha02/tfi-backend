@@ -43,7 +43,12 @@ Basado en la especificación del sistema de reservas de espacios de la Facultad.
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/departamentos` | Lista desplegable de departamentos/secretarías | Autenticado |
 | `GET` | `/api/equipamientos` | Catálogo flexible de equipamientos disponibles | Autenticado |
-| `GET` | `/api/auditoria` | Devuelve la bitácora de auditoría de acciones importantes | Administrador |
+| `GET` | `/api/auditoria` | Devuelve la bitácora paginada con filtros por usuario, acción, entidad y fechas UTC | Administrador / Secretaría Académica (`auditoria.ver`) |
+
+### Consulta de auditoría
+`GET /api/auditoria?page=1&pageSize=20&usuarioId=1&accion=AprobarReserva&entidad=Reserva&desde=2026-11-01T00:00:00Z&hasta=2026-11-30T23:59:59Z`
+
+Todos los filtros son opcionales. `page` comienza en 1; `pageSize` admite valores de 1 a 100. El resultado incluye `items`, `total`, `page` y `pageSize`; los eventos se ordenan por fecha descendente y, ante empate, por ID descendente. Las fechas deben enviarse en ISO 8601. Esta ruta es exclusivamente de lectura.
 
 ---
 

@@ -14,6 +14,13 @@ public class Auditoria
     public int? UsuarioId { get; set; }
     public Usuario? Usuario { get; set; }
 
+    /// <summary>Identidad del actor capturada al ocurrir el evento, independiente de cambios posteriores del usuario.</summary>
+    public string? UsuarioNombre { get; set; }
+    public string? UsuarioEmail { get; set; }
+
+    /// <summary>Rol o roles del actor al momento del evento; nulo para eventos sin usuario autenticado.</summary>
+    public string? Rol { get; set; }
+
     /// <summary>
     /// Fecha y hora UTC del suceso.
     /// </summary>

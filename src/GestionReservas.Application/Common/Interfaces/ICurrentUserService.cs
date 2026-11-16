@@ -14,6 +14,7 @@ public interface ICurrentUserService
     /// Dirección de email del usuario autenticado.
     /// </summary>
     string? Email { get; }
+    string? NombreCompleto { get; }
 
     /// <summary>
     /// Lista de roles asignados en el token JWT.

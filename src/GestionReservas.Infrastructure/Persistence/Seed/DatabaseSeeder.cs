@@ -102,7 +102,7 @@ public class DatabaseSeeder
             AsignarPermisos(rolResponsable, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "reservas.modificar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
 
             // SecretariaAcademica:
-            AsignarPermisos(rolSecretaria, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "reservas.modificar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver");
+            AsignarPermisos(rolSecretaria, permisos, "espacios.ver", "espacios.crear", "espacios.editar", "espacios.eliminar", "reservas.solicitar", "reservas.ver_propias", "reservas.ver_pendientes", "reservas.aprobar_rechazar", "reservas.cancelar", "reservas.modificar", "bloqueos.ver", "bloqueos.crear", "catalogos.ver", "auditoria.ver");
 
             // Administrador: todos los permisos
             foreach (var permiso in permisos)
@@ -346,6 +346,9 @@ public class DatabaseSeeder
             _context.Auditorias.Add(new Auditoria
             {
                 UsuarioId = adminUser.Id,
+                UsuarioNombre = adminUser.NombreCompleto,
+                UsuarioEmail = adminUser.Email,
+                Rol = "Administrador",
                 FechaHora = DateTime.UtcNow,
                 Accion = "SeedInicial",
                 Entidad = "Sistema",
@@ -396,7 +399,7 @@ public class DatabaseSeeder
         {
             ["Solicitante"] = new[] { "reservas.modificar" },
             ["ResponsableEspacio"] = new[] { "reservas.modificar" },
-            ["SecretariaAcademica"] = new[] { "reservas.solicitar", "reservas.ver_propias", "reservas.modificar" },
+            ["SecretariaAcademica"] = new[] { "reservas.solicitar", "reservas.ver_propias", "reservas.modificar", "auditoria.ver" },
             ["Administrador"] = new[] { "reservas.modificar" }
         };
 

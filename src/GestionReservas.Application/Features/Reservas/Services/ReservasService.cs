@@ -123,6 +123,9 @@ public class ReservasService : IReservasService
                 _context.Auditorias.Add(new Auditoria
                 {
                     UsuarioId = solicitanteId,
+                    Rol = string.Join(", ", _currentUserService.Roles),
+                    UsuarioNombre = _currentUserService.NombreCompleto,
+                    UsuarioEmail = _currentUserService.Email,
                     FechaHora = ahoraUtc,
                     Accion = "CrearAutoAprobada",
                     Entidad = "Reserva",
@@ -140,6 +143,9 @@ public class ReservasService : IReservasService
                 _context.Auditorias.Add(new Auditoria
                 {
                     UsuarioId = solicitanteId,
+                    Rol = string.Join(", ", _currentUserService.Roles),
+                    UsuarioNombre = _currentUserService.NombreCompleto,
+                    UsuarioEmail = _currentUserService.Email,
                     FechaHora = ahoraUtc,
                     Accion = "SolicitarReserva",
                     Entidad = "Reserva",
@@ -507,6 +513,9 @@ public class ReservasService : IReservasService
             _context.Auditorias.Add(new Auditoria
             {
                 UsuarioId = usuarioId,
+                Rol = string.Join(", ", _currentUserService.Roles),
+                UsuarioNombre = _currentUserService.NombreCompleto,
+                UsuarioEmail = _currentUserService.Email,
                 FechaHora = ahoraUtc,
                 Accion = accionAuditoria,
                 Entidad = "Reserva",
@@ -632,6 +641,9 @@ public class ReservasService : IReservasService
             _context.Auditorias.Add(new Auditoria
             {
                 UsuarioId = usuarioId,
+                Rol = string.Join(", ", _currentUserService.Roles),
+                UsuarioNombre = _currentUserService.NombreCompleto,
+                UsuarioEmail = _currentUserService.Email,
                 FechaHora = DateTime.UtcNow,
                 Accion = "ModificarReserva",
                 Entidad = "Reserva",

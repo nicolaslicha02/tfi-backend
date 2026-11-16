@@ -2,6 +2,8 @@ using FluentValidation;
 using GestionReservas.Application.Common.Interfaces;
 using GestionReservas.Application.Features.Auth;
 using GestionReservas.Application.Features.Auth.Services;
+using GestionReservas.Application.Features.Bitacora;
+using GestionReservas.Application.Features.Bitacora.Services;
 using GestionReservas.Application.Features.Catalogos;
 using GestionReservas.Application.Features.Catalogos.Services;
 using GestionReservas.Application.Features.Espacios;
@@ -19,6 +21,7 @@ public static class DependencyInjection
     {
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IAuditoriaService, AuditoriaService>();
         services.AddScoped<ICatalogosService, CatalogosService>();
         services.AddScoped<IUsuariosService, UsuariosService>();
         services.AddScoped<IEspacioAuthorizationService, EspacioAuthorizationService>();

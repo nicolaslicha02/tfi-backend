@@ -45,7 +45,7 @@ back-office-tfi/
 │   ├── GestionReservas.Infrastructure/ # Persistencia EF Core, Npgsql, JwtTokenService, CurrentUserService, Seeder
 │   │   ├── Persistence/
 │   │   │   ├── Configurations/         # Fluent API IEntityTypeConfiguration para cada entidad
-│   │   │   ├── Migrations/             # Migraciones EF Core (InitialCreate, AddReservaExclusionConstraint)
+│   │   │   ├── Migrations/             # Migraciones EF Core (incluye auditoría histórica y exclusión de reservas)
 │   │   │   ├── Seed/                   # DatabaseSeeder con datos iniciales (usuarios, espacios, cursadas)
 │   │   │   └── ApplicationDbContext.cs # DbContext con soporte Npgsql / PostgreSQL y advisory locks
 │   │   ├── Security/                   # JwtOptions, JwtTokenService, CurrentUserService
@@ -54,6 +54,7 @@ back-office-tfi/
 │   └── GestionReservas.Api/            # ASP.NET Core Web API, Controllers, Middlewares, Swagger
 │       ├── Controllers/
 │       │   ├── AuthController.cs       # POST /api/auth/login, GET /api/auth/me
+│       │   ├── AuditoriaController.cs  # GET /api/auditoria (permiso auditoria.ver)
 │       │   ├── BloqueosController.cs   # POST /api/bloqueos, GET /api/bloqueos, DELETE /api/bloqueos/{id}
 │       │   ├── DepartamentosController.cs # GET /api/departamentos
 │       │   ├── EquipamientosController.cs # GET /api/equipamientos, POST /api/equipamientos
@@ -70,7 +71,7 @@ back-office-tfi/
 │       └── Properties/launchSettings.json # Configuración de puertos: http://localhost:5051
 │
 ├── tests/
-│   └── GestionReservas.Tests/          # Proyecto de pruebas de integración con xUnit (53 tests)
+│   └── GestionReservas.Tests/          # Proyecto de pruebas de integración con xUnit (58 escenarios)
 │       ├── Infrastructure/             # CustomWebApplicationFactory (PostgreSQL GestionReservasDb_Test)
 │       ├── AuthEndpointsTests.cs       # 8 tests de autenticación, JWT y perfil
 │       ├── UsuariosAndCatalogosEndpointsTests.cs # 11 tests de usuarios, passwords, permisos y catálogos
@@ -183,6 +184,12 @@ Si no se configura User Secrets, el sistema cuenta con un fallback seguro para e
 - `GET /api/bloqueos`: Listado paginado de bloqueos con filtros (`espacioId`, `desde`, `hasta`, `soloVigentes`) y alcance departamental.
 - `DELETE /api/bloqueos/{id}`: Levantamiento del bloqueo con registro en auditoría.
 
+### 5.8 Bitácora institucional (`/api/auditoria`)
+- `GET /api/auditoria`: Consulta de solo lectura, paginada y ordenada por fecha descendente.
+- Filtros opcionales: `usuarioId`, `accion`, `entidad`, `desde` y `hasta` (ISO 8601).
+- Acceso para Administrador y Secretaría Académica mediante el permiso `auditoria.ver`.
+- La respuesta incluye el rol registrado al momento del evento; los eventos previos a la migración pueden no tener rol histórico.
+
 ---
 
 ## 6. Reglas de Negocio, Concurrencia y Persistencia Temporal
@@ -229,7 +236,16 @@ Al intentar registrar un bloqueo sobre un espacio físico (`POST /api/bloqueos`)
 
 ## 7. Instrucciones para Ejecutar y Probar
 
-### 1. Iniciar el Backend
+### 1. Aplicar migraciones
+Con PostgreSQL disponible, guardar las credenciales locales fuera del repositorio y aplicar las migraciones desde la raíz:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=GestionReservasDb;Username=postgres;Password=<contraseña-local>" --project src/GestionReservas.Api
+dotnet user-secrets set "Jwt:Key" "<clave-aleatoria-de-al-menos-32-caracteres>" --project src/GestionReservas.Api
+dotnet ef database update --project src/GestionReservas.Infrastructure --startup-project src/GestionReservas.Api
+```
+
+### 2. Iniciar el Backend
 El puerto configurado en `launchSettings.json` es el **5051** (HTTP):
 
 ```powershell
@@ -240,7 +256,7 @@ Una vez iniciado, la API estará escuchando en:
 - **Swagger UI**: [http://localhost:5051/swagger](http://localhost:5051/swagger)
 - **Health Check**: [http://localhost:5051/health](http://localhost:5051/health)
 
-### 2. Probar en Swagger UI
+### 3. Probar en Swagger UI
 1. Navegar a [http://localhost:5051/swagger](http://localhost:5051/swagger).
 2. Desplegar `POST /api/auth/login` y presionar **Try it out**.
 3. Ingresar las credenciales de prueba:
@@ -254,8 +270,8 @@ Una vez iniciado, la API estará escuchando en:
 5. Hacer clic en el botón verde **Authorize** (arriba a la derecha), escribir `Bearer <tu_token>` y presionar **Authorize**.
 6. Probar los endpoints protegidos correspondientes a cada rol.
 
-### 3. Ejecutar la Suite de Pruebas Automatizadas (xUnit)
-La suite de pruebas en `tests/GestionReservas.Tests` valida exhaustivamente los **53 escenarios de integración** sobre una base de datos PostgreSQL de test aislada (`GestionReservasDb_Test`):
+### 4. Ejecutar la Suite de Pruebas Automatizadas (xUnit)
+La suite de pruebas en `tests/GestionReservas.Tests` valida **58 escenarios de integración** sobre PostgreSQL en la base de test `GestionReservasDb_Test`:
 
 ```powershell
 dotnet test tests/GestionReservas.Tests/GestionReservas.Tests.csproj
@@ -312,3 +328,7 @@ dotnet test tests/GestionReservas.Tests/GestionReservas.Tests.csproj
    - Endpoint `GET /api/roles` retornando catálogo completo de roles del sistema.
    - Altas de catálogo por Admin (`POST /api/equipamientos`) y rechazo a docentes (403 Forbidden).
    - Listado administrativo `GET /api/reservas` con filtros y restricción 403 para rol Solicitante.
+
+7. **Bitácora de auditoría (`AuditoriaEndpointsTests` - 5 escenarios)**:
+   - Acceso de Administrador y Secretaría Académica, y rechazo a Solicitante (403).
+   - Aplicación de filtros, rol/identidad histórica del actor y rechazo de rangos de fechas invertidos.

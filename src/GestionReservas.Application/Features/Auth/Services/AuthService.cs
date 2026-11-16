@@ -65,7 +65,8 @@ public class AuthService : IAuthService
                 entidadId: normalizedEmail,
                 motivo: "Credenciales inválidas (usuario no encontrado)",
                 detalle: $"IP: {ipAddress ?? "desconocida"}",
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken,
+                emailSnapshot: normalizedEmail);
 
             _logger.LogWarning("Intento de login fallido para el email '{Email}': usuario no encontrado.", normalizedEmail);
             throw new UnauthorizedException("Credenciales inválidas.");
@@ -79,7 +80,9 @@ public class AuthService : IAuthService
                 entidadId: usuario.Id.ToString(),
                 motivo: "Credenciales inválidas (contraseña incorrecta)",
                 detalle: $"IP: {ipAddress ?? "desconocida"}",
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken,
+                emailSnapshot: usuario.Email,
+                nombreSnapshot: usuario.NombreCompleto);
 
             _logger.LogWarning("Intento de login fallido para el usuario ID {UsuarioId}: contraseña no coincide.", usuario.Id);
             throw new UnauthorizedException("Credenciales inválidas.");
@@ -94,7 +97,9 @@ public class AuthService : IAuthService
                 entidadId: usuario.Id.ToString(),
                 motivo: "Usuario inactivo o dado de baja",
                 detalle: $"IP: {ipAddress ?? "desconocida"}",
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken,
+                emailSnapshot: usuario.Email,
+                nombreSnapshot: usuario.NombreCompleto);
 
             _logger.LogWarning("Intento de login rechazado para el usuario ID {UsuarioId}: cuenta inactiva.", usuario.Id);
             throw new UnauthorizedException("El usuario se encuentra inhabilitado para operar en el sistema.");
@@ -122,7 +127,10 @@ public class AuthService : IAuthService
             entidadId: usuario.Id.ToString(),
             motivo: "Inicio de sesión correcto",
             detalle: $"Roles: {string.Join(", ", roles)} | IP: {ipAddress ?? "desconocida"}",
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            emailSnapshot: usuario.Email,
+            nombreSnapshot: usuario.NombreCompleto,
+            rol: string.Join(", ", roles));
 
         _logger.LogInformation("Usuario ID {UsuarioId} ({Email}) inició sesión exitosamente.", usuario.Id, usuario.Email);
 
@@ -197,13 +205,19 @@ public class AuthService : IAuthService
         string entidadId,
         string motivo,
         string detalle,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? emailSnapshot = null,
+        string? nombreSnapshot = null,
+        string? rol = null)
     {
         try
         {
             var auditoria = new Auditoria
             {
                 UsuarioId = usuarioId,
+                UsuarioEmail = emailSnapshot,
+                UsuarioNombre = nombreSnapshot,
+                Rol = rol,
                 FechaHora = DateTime.UtcNow,
                 Accion = accion,
                 Entidad = "Usuario",
@@ -218,7 +232,10 @@ public class AuthService : IAuthService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error al guardar registro de auditoría para la acción {Accion}.", accion);
-            // No interrumpir el flujo si la auditoría falla
+            if (accion == "LoginExitoso")
+            {
+                throw new InvalidOperationException("No se pudo registrar el inicio de sesión en la bitácora.", ex);
+            }
         }
     }
 }

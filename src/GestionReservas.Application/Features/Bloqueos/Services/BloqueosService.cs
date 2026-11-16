@@ -150,6 +150,9 @@ public class BloqueosService : IBloqueosService
                     _context.Auditorias.Add(new Auditoria
                     {
                         UsuarioId = usuarioId,
+                        Rol = string.Join(", ", _currentUserService.Roles),
+                        UsuarioNombre = _currentUserService.NombreCompleto,
+                        UsuarioEmail = _currentUserService.Email,
                         FechaHora = ahoraUtc,
                         Accion = "CancelarReserva",
                         Entidad = "Reserva",
@@ -193,6 +196,9 @@ public class BloqueosService : IBloqueosService
             _context.Auditorias.Add(new Auditoria
             {
                 UsuarioId = usuarioId,
+                Rol = string.Join(", ", _currentUserService.Roles),
+                UsuarioNombre = _currentUserService.NombreCompleto,
+                UsuarioEmail = _currentUserService.Email,
                 FechaHora = ahoraUtc,
                 Accion = "CrearBloqueo",
                 Entidad = "Bloqueo",
@@ -349,6 +355,9 @@ public class BloqueosService : IBloqueosService
         _context.Auditorias.Add(new Auditoria
         {
             UsuarioId = usuarioId,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
             FechaHora = DateTime.UtcNow,
             Accion = "LevantarBloqueo",
             Entidad = "Bloqueo",

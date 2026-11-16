@@ -252,6 +252,7 @@ public class EspaciosService : IEspaciosService
             Equipamientos = equipamientosList
         };
 
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         _context.Espacios.Add(espacio);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -260,6 +261,9 @@ public class EspaciosService : IEspaciosService
         var auditoria = new Auditoria
         {
             UsuarioId = currentUserId,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
             FechaHora = DateTime.UtcNow,
             Accion = "CrearEspacio",
             Entidad = "Espacio",
@@ -270,6 +274,7 @@ public class EspaciosService : IEspaciosService
 
         _context.Auditorias.Add(auditoria);
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return MapToDetalleDto(espacio);
     }
@@ -329,6 +334,7 @@ public class EspaciosService : IEspaciosService
         }
 
         // 4. Validar y reemplazar equipamientos
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         _context.EspaciosEquipamiento.RemoveRange(espacio.Equipamientos);
         espacio.Equipamientos.Clear();
 
@@ -379,6 +385,9 @@ public class EspaciosService : IEspaciosService
         var auditoria = new Auditoria
         {
             UsuarioId = currentUserId,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
             FechaHora = DateTime.UtcNow,
             Accion = "ModificarEspacio",
             Entidad = "Espacio",
@@ -389,6 +398,7 @@ public class EspaciosService : IEspaciosService
 
         _context.Auditorias.Add(auditoria);
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return MapToDetalleDto(espacio);
     }
@@ -434,6 +444,9 @@ public class EspaciosService : IEspaciosService
         var auditoria = new Auditoria
         {
             UsuarioId = currentUserId,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
             FechaHora = DateTime.UtcNow,
             Accion = "EliminarEspacio",
             Entidad = "Espacio",

@@ -15,6 +15,15 @@ public class AuditoriaConfiguration : IEntityTypeConfiguration<Auditoria>
         builder.Property(a => a.FechaHora)
             .IsRequired();
 
+        builder.Property(a => a.Rol)
+            .HasMaxLength(200);
+
+        builder.Property(a => a.UsuarioNombre)
+            .HasMaxLength(150);
+
+        builder.Property(a => a.UsuarioEmail)
+            .HasMaxLength(150);
+
         builder.Property(a => a.Accion)
             .IsRequired()
             .HasMaxLength(100);
@@ -38,6 +47,8 @@ public class AuditoriaConfiguration : IEntityTypeConfiguration<Auditoria>
             .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(a => a.FechaHora);
+        builder.HasIndex(a => a.Accion);
         builder.HasIndex(a => new { a.Entidad, a.EntidadId });
+        builder.HasIndex(a => new { a.FechaHora, a.Id });
     }
 }

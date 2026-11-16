@@ -33,6 +33,8 @@ public class CurrentUserService : ICurrentUserService
 
     public string? Email => User?.FindFirst(ClaimTypes.Email)?.Value;
 
+    public string? NombreCompleto => User?.FindFirst(ClaimTypes.Name)?.Value;
+
     public IReadOnlyList<string> Roles => User?.FindAll(ClaimTypes.Role)
         .Select(c => c.Value)
         .Distinct()

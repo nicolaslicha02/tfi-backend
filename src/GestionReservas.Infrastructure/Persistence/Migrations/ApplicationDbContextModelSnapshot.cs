@@ -86,16 +86,32 @@ namespace GestionReservas.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("Rol")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("UsuarioEmail")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<int?>("UsuarioId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("UsuarioNombre")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Accion");
 
                     b.HasIndex("FechaHora");
 
                     b.HasIndex("UsuarioId");
 
                     b.HasIndex("Entidad", "EntidadId");
+
+                    b.HasIndex("FechaHora", "Id");
 
                     b.ToTable("Auditorias", (string)null);
                 });

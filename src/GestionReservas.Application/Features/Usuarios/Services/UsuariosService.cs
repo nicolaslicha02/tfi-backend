@@ -110,6 +110,7 @@ public class UsuariosService : IUsuariosService
             });
         }
 
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         _context.Usuarios.Add(usuario);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -118,6 +119,9 @@ public class UsuariosService : IUsuariosService
         var auditoria = new Auditoria
         {
             UsuarioId = currentUserId,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
             FechaHora = DateTime.UtcNow,
             Accion = "CrearUsuario",
             Entidad = "Usuario",
@@ -128,6 +132,7 @@ public class UsuariosService : IUsuariosService
 
         _context.Auditorias.Add(auditoria);
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new UsuarioDetalleDto
         {
@@ -249,6 +254,11 @@ public class UsuariosService : IUsuariosService
         {
             throw new ValidationException(validationResult.Errors);
         }
+
+        // Serializa las modificaciones de usuarios para que la regla de último administrador
+        // no dependa de conteos observados simultáneamente por dos solicitudes.
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await _context.AcquireAdvisoryXactLockAsync(0x4752535553455253L, cancellationToken);
 
         var usuario = await _context.Usuarios
             .Include(u => u.Departamento)
@@ -404,6 +414,9 @@ public class UsuariosService : IUsuariosService
             var auditoria = new Auditoria
             {
                 UsuarioId = currentUserId,
+                Rol = string.Join(", ", _currentUserService.Roles),
+                UsuarioNombre = _currentUserService.NombreCompleto,
+                UsuarioEmail = _currentUserService.Email,
                 FechaHora = DateTime.UtcNow,
                 Accion = "ModificarUsuario",
                 Entidad = "Usuario",
@@ -415,6 +428,8 @@ public class UsuariosService : IUsuariosService
             _context.Auditorias.Add(auditoria);
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         // Recargar departamento si cambió
         if (usuario.DepartamentoId.HasValue && (usuario.Departamento == null || usuario.Departamento.Id != usuario.DepartamentoId))

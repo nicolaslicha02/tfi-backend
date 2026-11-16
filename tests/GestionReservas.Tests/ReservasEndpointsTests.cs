@@ -256,13 +256,16 @@ public class ReservasEndpointsTests : IClassFixture<CustomWebApplicationFactory>
     public async Task MisReservas_SoloDevuelveLasPropias()
     {
         var espacio = await CrearEspacioAsync();
-        var d = Dia();
+        // Ventana con fecha/hora única para mantener el test aislado en la BD compartida.
+        var d = DateTime.UtcNow.AddDays(2).AddMinutes((uint)Guid.NewGuid().GetHashCode() % 100_000);
         var docente = await DocenteAsync();
         var admin = await AdminAsync();
         var propia = await CrearPendienteAsync(docente, espacio, d.AddHours(10), d.AddHours(11));
         var ajena = await CrearPendienteAsync(admin, await CrearEspacioAsync(), d.AddHours(10), d.AddHours(11));
 
-        var r = await SendAsync(docente, HttpMethod.Get, "/api/mis-reservas?pageSize=100");
+        var desde = Uri.EscapeDataString(d.AddHours(9).ToString("O"));
+        var hasta = Uri.EscapeDataString(d.AddHours(12).ToString("O"));
+        var r = await SendAsync(docente, HttpMethod.Get, $"/api/mis-reservas?pageSize=100&desde={desde}&hasta={hasta}");
         var page = await r.Content.ReadFromJsonAsync<GestionReservas.Application.Common.Models.PagedResultDto<ReservaListadoDto>>();
         Assert.Contains(page!.Items, x => x.Id == propia.Id);
         Assert.DoesNotContain(page.Items, x => x.Id == ajena.Id);

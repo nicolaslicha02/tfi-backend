@@ -111,6 +111,7 @@ public class CatalogosService : ICatalogosService
             Descripcion = string.IsNullOrWhiteSpace(request.Descripcion) ? null : request.Descripcion.Trim()
         };
 
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         _context.Equipamientos.Add(equipamiento);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -118,6 +119,9 @@ public class CatalogosService : ICatalogosService
         _context.Auditorias.Add(new Auditoria
         {
             UsuarioId = usuarioId,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
             FechaHora = DateTime.UtcNow,
             Accion = "CrearEquipamiento",
             Entidad = "Equipamiento",
@@ -126,6 +130,7 @@ public class CatalogosService : ICatalogosService
             Detalle = $"Equipamiento '{equipamiento.Nombre}' registrado en el catálogo."
         });
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new EquipamientoDto
         {
@@ -160,6 +165,7 @@ public class CatalogosService : ICatalogosService
             Descripcion = string.IsNullOrWhiteSpace(request.Descripcion) ? null : request.Descripcion.Trim()
         };
 
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         _context.TiposEspacio.Add(tipoEspacio);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -167,6 +173,9 @@ public class CatalogosService : ICatalogosService
         _context.Auditorias.Add(new Auditoria
         {
             UsuarioId = usuarioId,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
             FechaHora = DateTime.UtcNow,
             Accion = "CrearTipoEspacio",
             Entidad = "TipoEspacio",
@@ -175,6 +184,7 @@ public class CatalogosService : ICatalogosService
             Detalle = $"Tipo de espacio '{tipoEspacio.Nombre}' registrado en el catálogo."
         });
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new TipoEspacioDto
         {
