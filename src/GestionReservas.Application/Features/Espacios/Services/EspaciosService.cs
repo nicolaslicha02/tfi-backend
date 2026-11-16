@@ -4,6 +4,7 @@ using GestionReservas.Application.Common.Helpers;
 using GestionReservas.Application.Common.Interfaces;
 using GestionReservas.Application.Common.Models;
 using GestionReservas.Application.Features.Espacios.DTOs;
+using GestionReservas.Domain.Constants;
 using GestionReservas.Domain.Entities;
 using GestionReservas.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -60,7 +61,11 @@ public class EspaciosService : IEspaciosService
                 .ThenInclude(ee => ee.Equipamiento)
             .AsNoTracking();
 
-        if (!parameters.IncluirBajas)
+        var puedeVerBajas = _currentUserService.HasPermission(PermisosDefinidos.EspaciosCrear) ||
+                            _currentUserService.HasPermission(PermisosDefinidos.EspaciosEditar) ||
+                            _currentUserService.HasPermission(PermisosDefinidos.EspaciosEliminar);
+
+        if (!parameters.IncluirBajas || !puedeVerBajas)
         {
             query = query.Where(e => e.FechaBaja == null);
         }

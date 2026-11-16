@@ -361,6 +361,12 @@ public class ReservasService : IReservasService
         var usuarioId = _currentUserService.UsuarioId
             ?? throw new UnauthorizedException("Usuario no autenticado.");
 
+        if (!_currentUserService.HasPermission(PermisosDefinidos.ReservasVerPropias) &&
+            !_currentUserService.HasPermission(PermisosDefinidos.ReservasVerPendientes))
+        {
+            throw new ForbiddenException("No posee los permisos necesarios para consultar el detalle de reservas.");
+        }
+
         var reservaInfo = await _context.Reservas
             .AsNoTracking()
             .Where(r => r.Id == id)
