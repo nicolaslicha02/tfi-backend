@@ -1,5 +1,6 @@
 using GestionReservas.Application.Features.Catalogos;
 using GestionReservas.Application.Features.Catalogos.DTOs;
+using GestionReservas.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +11,7 @@ namespace GestionReservas.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/roles")]
-[Authorize]
+[Authorize(Policy = PermisosDefinidos.UsuariosGestionar)]
 public class RolesController : ControllerBase
 {
     private readonly ICatalogosService _catalogosService;
@@ -26,6 +27,7 @@ public class RolesController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<RolDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<RolDto>>> GetAll(CancellationToken cancellationToken)
     {
         var roles = await _catalogosService.GetRolesAsync(cancellationToken);

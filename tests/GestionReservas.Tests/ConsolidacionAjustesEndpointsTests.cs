@@ -139,8 +139,14 @@ public class ConsolidacionAjustesEndpointsTests : IClassFixture<CustomWebApplica
     public async Task GetRoles_Devuelve200Con4Roles()
     {
         var docente = await DocenteAsync();
+        var admin = await AdminAsync();
 
-        var response = await SendAsync(docente, HttpMethod.Get, "/api/roles");
+        // Solicitante no posee usuarios.gestionar -> 403 Forbidden
+        var forbiddenResp = await SendAsync(docente, HttpMethod.Get, "/api/roles");
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenResp.StatusCode);
+
+        // Administrador posee usuarios.gestionar -> 200 OK
+        var response = await SendAsync(admin, HttpMethod.Get, "/api/roles");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var roles = await response.Content.ReadFromJsonAsync<List<RolDto>>();

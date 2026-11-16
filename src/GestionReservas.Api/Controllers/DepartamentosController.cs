@@ -1,5 +1,6 @@
 using GestionReservas.Application.Features.Catalogos;
 using GestionReservas.Application.Features.Catalogos.DTOs;
+using GestionReservas.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +11,7 @@ namespace GestionReservas.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Policy = PermisosDefinidos.CatalogosVer)]
 public class DepartamentosController : ControllerBase
 {
     private readonly ICatalogosService _catalogosService;
