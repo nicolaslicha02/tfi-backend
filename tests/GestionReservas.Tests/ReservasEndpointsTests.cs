@@ -178,8 +178,8 @@ public class ReservasEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Contains(detalle.HistorialCambios, h => h.Motivo == "Sin disponibilidad de personal");
 
         // Notificación al solicitante, consultable y marcable como leída
-        var notifs = await (await SendAsync(docente, HttpMethod.Get, "/api/notificaciones?leida=false")).Content.ReadFromJsonAsync<List<NotificacionDto>>();
-        var n = notifs!.First(x => x.Mensaje.Contains($"#{res.Id}"));
+        var notifsPage = await (await SendAsync(docente, HttpMethod.Get, "/api/notificaciones?leida=false&pageSize=100")).Content.ReadFromJsonAsync<GestionReservas.Application.Common.Models.PagedResultDto<NotificacionDto>>();
+        var n = notifsPage!.Items.First(x => x.Mensaje.Contains($"#{res.Id}"));
         var leer = await SendAsync(docente, new HttpMethod("PATCH"), $"/api/notificaciones/{n.Id}/leer");
         Assert.Equal(HttpStatusCode.OK, leer.StatusCode);
 

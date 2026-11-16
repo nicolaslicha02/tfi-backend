@@ -22,10 +22,10 @@ public interface IReservasService
     Task<PagedResultDto<ReservaListadoDto>> GetMisReservasAsync(MisReservasQueryParameters queryParams, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Obtiene las reservas filtradas por estado (PendienteAprobacion, Cancelada o Rechazada) según alcance departamental:
+    /// Obtiene las reservas paginadas filtradas por estado (PendienteAprobacion, Cancelada o Rechazada) según alcance departamental:
     /// Administrador y Secretaría Académica ven todas; Responsable de Espacio solo las de su departamento.
     /// </summary>
-    Task<IReadOnlyList<ReservaListadoDto>> GetReservasPorEstadoAsync(EstadoReserva estado, CancellationToken cancellationToken = default);
+    Task<PagedResultDto<ReservaListadoDto>> GetReservasPorEstadoAsync(EstadoReserva estado, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Obtiene el detalle completo de una reserva junto con su historial de cambios de estado leído de Auditoría.

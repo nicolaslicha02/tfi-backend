@@ -219,10 +219,22 @@ public class ReservasService : IReservasService
         return new PagedResultDto<ReservaListadoDto>(items, total, queryParams.Page, queryParams.PageSize);
     }
 
-    public async Task<IReadOnlyList<ReservaListadoDto>> GetReservasPorEstadoAsync(
+    public async Task<PagedResultDto<ReservaListadoDto>> GetReservasPorEstadoAsync(
         EstadoReserva estado,
+        int page = 1,
+        int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
+        if (page < 1)
+        {
+            throw new ValidationException("Page", "El número de página debe ser mayor o igual a 1.");
+        }
+
+        if (pageSize is < 1 or > 100)
+        {
+            throw new ValidationException("PageSize", "El tamaño de página debe estar entre 1 y 100.");
+        }
+
         var usuarioId = _currentUserService.UsuarioId
             ?? throw new UnauthorizedException("Usuario no autenticado.");
 
@@ -248,15 +260,21 @@ public class ReservasService : IReservasService
 
             if (!deptoId.HasValue)
             {
-                return Array.Empty<ReservaListadoDto>();
+                return new PagedResultDto<ReservaListadoDto>(Array.Empty<ReservaListadoDto>(), 0, page, pageSize);
             }
 
             query = query.Where(r => r.Espacio.DepartamentoId == deptoId.Value);
         }
 
-        return await ProyectarListado(
-                query.OrderBy(r => r.FechaHoraInicio).ThenBy(r => r.Id))
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await ProyectarListado(
+                query.OrderBy(r => r.FechaHoraInicio).ThenBy(r => r.Id)
+                     .Skip((page - 1) * pageSize)
+                     .Take(pageSize))
             .ToListAsync(cancellationToken);
+
+        return new PagedResultDto<ReservaListadoDto>(items, total, page, pageSize);
     }
 
     public async Task<PagedResultDto<ReservaListadoDto>> GetReservasAdministrativasAsync(

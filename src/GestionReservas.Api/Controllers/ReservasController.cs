@@ -46,23 +46,35 @@ public class ReservasController : ControllerBase
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> GetReservas([FromQuery] ReservasQueryParameters query, CancellationToken ct)
         => Ok(await _reservasService.GetReservasAdministrativasAsync(query, ct));
 
-    /// <summary>Solicitudes pendientes de aprobación.</summary>
+    /// <summary>Solicitudes pendientes de aprobación (paginadas).</summary>
     [HttpGet("api/reservas/pendientes")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
-    public async Task<ActionResult<IReadOnlyList<ReservaListadoDto>>> Pendientes(CancellationToken ct)
-        => Ok(await _reservasService.GetReservasPorEstadoAsync(EstadoReserva.PendienteAprobacion, ct));
+    [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> Pendientes(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+        => Ok(await _reservasService.GetReservasPorEstadoAsync(EstadoReserva.PendienteAprobacion, page, pageSize, ct));
 
-    /// <summary>Reservas canceladas.</summary>
+    /// <summary>Reservas canceladas (paginadas).</summary>
     [HttpGet("api/reservas/canceladas")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
-    public async Task<ActionResult<IReadOnlyList<ReservaListadoDto>>> Canceladas(CancellationToken ct)
-        => Ok(await _reservasService.GetReservasPorEstadoAsync(EstadoReserva.Cancelada, ct));
+    [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> Canceladas(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+        => Ok(await _reservasService.GetReservasPorEstadoAsync(EstadoReserva.Cancelada, page, pageSize, ct));
 
-    /// <summary>Reservas rechazadas.</summary>
+    /// <summary>Reservas rechazadas (paginadas).</summary>
     [HttpGet("api/reservas/rechazadas")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
-    public async Task<ActionResult<IReadOnlyList<ReservaListadoDto>>> Rechazadas(CancellationToken ct)
-        => Ok(await _reservasService.GetReservasPorEstadoAsync(EstadoReserva.Rechazada, ct));
+    [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> Rechazadas(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+        => Ok(await _reservasService.GetReservasPorEstadoAsync(EstadoReserva.Rechazada, page, pageSize, ct));
 
     /// <summary>Detalle de una reserva con su historial de cambios (solicitante, responsable, Secretaría o Admin).</summary>
     [HttpGet("api/reservas/{id:int}")]

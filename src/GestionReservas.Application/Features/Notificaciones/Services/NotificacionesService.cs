@@ -1,5 +1,6 @@
 using GestionReservas.Application.Common.Exceptions;
 using GestionReservas.Application.Common.Interfaces;
+using GestionReservas.Application.Common.Models;
 using GestionReservas.Application.Features.Notificaciones.DTOs;
 using GestionReservas.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -20,8 +21,22 @@ public class NotificacionesService : INotificacionesService
         _currentUserService = currentUserService;
     }
 
-    public async Task<IReadOnlyList<NotificacionDto>> GetMisNotificacionesAsync(bool? leida = null, CancellationToken cancellationToken = default)
+    public async Task<PagedResultDto<NotificacionDto>> GetMisNotificacionesAsync(
+        bool? leida = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
+        if (page < 1)
+        {
+            throw new ValidationException("Page", "El número de página debe ser mayor o igual a 1.");
+        }
+
+        if (pageSize is < 1 or > 100)
+        {
+            throw new ValidationException("PageSize", "El tamaño de página debe estar entre 1 y 100.");
+        }
+
         var usuarioId = _currentUserService.UsuarioId
             ?? throw new UnauthorizedException("Usuario no autenticado.");
 
@@ -34,9 +49,13 @@ public class NotificacionesService : INotificacionesService
             query = query.Where(n => n.Leida == leida.Value);
         }
 
-        return await query
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
             .OrderByDescending(n => n.Fecha)
             .ThenByDescending(n => n.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(n => new NotificacionDto
             {
                 Id = n.Id,
@@ -45,6 +64,8 @@ public class NotificacionesService : INotificacionesService
                 Fecha = n.Fecha
             })
             .ToListAsync(cancellationToken);
+
+        return new PagedResultDto<NotificacionDto>(items, total, page, pageSize);
     }
 
     public async Task<NotificacionDto> MarcarComoLeidaAsync(int id, CancellationToken cancellationToken = default)

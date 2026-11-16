@@ -189,8 +189,8 @@ public class BloqueosEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Contains("Cancelada por bloqueo del espacio: Reparación eléctrica de urgencia", detalleRes.MotivoRechazo);
 
         // 4. Verificar que el docente recibió notificación
-        var notifs = await (await SendAsync(docente, HttpMethod.Get, "/api/notificaciones?leida=false")).Content.ReadFromJsonAsync<List<NotificacionDto>>();
-        Assert.Contains(notifs!, n => n.Mensaje.Contains($"#{reserva.Id}") && n.Mensaje.Contains("CANCELADA"));
+        var notifsPage = await (await SendAsync(docente, HttpMethod.Get, "/api/notificaciones?leida=false&pageSize=100")).Content.ReadFromJsonAsync<PagedResultDto<NotificacionDto>>();
+        Assert.Contains(notifsPage!.Items, n => n.Mensaje.Contains($"#{reserva.Id}") && n.Mensaje.Contains("CANCELADA"));
     }
 
     [Fact]

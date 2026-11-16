@@ -1,3 +1,4 @@
+using GestionReservas.Application.Common.Models;
 using GestionReservas.Application.Features.Notificaciones.DTOs;
 
 namespace GestionReservas.Application.Features.Notificaciones;
@@ -8,9 +9,13 @@ namespace GestionReservas.Application.Features.Notificaciones;
 public interface INotificacionesService
 {
     /// <summary>
-    /// Obtiene las notificaciones propias del usuario autenticado, ordenadas por fecha descendente.
+    /// Obtiene las notificaciones propias del usuario autenticado de forma paginada, ordenadas por fecha descendente.
     /// </summary>
-    Task<IReadOnlyList<NotificacionDto>> GetMisNotificacionesAsync(bool? leida = null, CancellationToken cancellationToken = default);
+    Task<PagedResultDto<NotificacionDto>> GetMisNotificacionesAsync(
+        bool? leida = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Marca como leída una notificación propia del usuario autenticado.

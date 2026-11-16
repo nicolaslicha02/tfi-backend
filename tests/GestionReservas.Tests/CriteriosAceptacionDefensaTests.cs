@@ -278,8 +278,8 @@ public class CriteriosAceptacionDefensaTests : IClassFixture<CustomWebApplicatio
         Assert.Equal(EstadoReserva.Cancelada, detalle!.Estado);
         Assert.Contains(detalle.HistorialCambios, h => h.Accion == "CancelarReserva" && h.Motivo != null && h.Motivo.Contains("Cancelada por bloqueo del espacio"));
 
-        var notifs = await (await SendAsync(docente, HttpMethod.Get, "/api/notificaciones?leida=false")).Content.ReadFromJsonAsync<List<NotificacionDto>>();
-        Assert.Contains(notifs!, n => n.Mensaje.Contains($"#{reserva.Id}"));
+        var notifsPage = await (await SendAsync(docente, HttpMethod.Get, "/api/notificaciones?leida=false&pageSize=100")).Content.ReadFromJsonAsync<GestionReservas.Application.Common.Models.PagedResultDto<NotificacionDto>>();
+        Assert.Contains(notifsPage!.Items, n => n.Mensaje.Contains($"#{reserva.Id}"));
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using GestionReservas.Application.Common.Models;
 using GestionReservas.Application.Features.Notificaciones;
 using GestionReservas.Application.Features.Notificaciones.DTOs;
 using Microsoft.AspNetCore.Authorization;
@@ -21,17 +22,21 @@ public class NotificacionesController : ControllerBase
     }
 
     /// <summary>
-    /// Devuelve las notificaciones propias del usuario autenticado, ordenadas por fecha descendente.
+    /// Devuelve las notificaciones propias del usuario autenticado de forma paginada, ordenadas por fecha descendente.
     /// </summary>
     /// <param name="leida">Filtro opcional por estado de lectura (true = leídas, false = no leídas).</param>
+    /// <param name="page">Número de página (por defecto 1).</param>
+    /// <param name="pageSize">Cantidad de registros por página (por defecto 20, máximo 100).</param>
     /// <param name="cancellationToken">Token de cancelación.</param>
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyList<NotificacionDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<NotificacionDto>>> GetMisNotificaciones(
+    [ProducesResponseType(typeof(PagedResultDto<NotificacionDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResultDto<NotificacionDto>>> GetMisNotificaciones(
         [FromQuery] bool? leida = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var result = await _notificacionesService.GetMisNotificacionesAsync(leida, cancellationToken);
+        var result = await _notificacionesService.GetMisNotificacionesAsync(leida, page, pageSize, cancellationToken);
         return Ok(result);
     }
 
