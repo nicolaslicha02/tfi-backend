@@ -190,6 +190,16 @@ Si no se configura User Secrets, el sistema cuenta con un fallback seguro para e
 - Acceso para Administrador y Secretaría Académica mediante el permiso `auditoria.ver`.
 - La respuesta incluye el rol registrado al momento del evento; los eventos previos a la migración pueden no tener rol histórico.
 
+### 5.9 Calendario Unificado de Ocupación (`/api/calendario`)
+- `GET /api/calendario`: Devuelve una lista unificada de eventos ordenada cronológicamente por inicio (`tipo`: `"Reserva"`, `"Bloqueo"` o `"Cursada"`) para cualquier usuario autenticado.
+- **Parámetros**: `desde` y `hasta` obligatorios (`hasta >= desde`, rango máximo de **31 días**), y filtros opcionales `espacioId`, `edificio`, `sector`, `tipoEspacioId` y `departamentoId`.
+- **Fuentes unificadas**: Combina en una misma respuesta reservas en estado `Aprobada` y `PendienteAprobacion`, bloqueos vigentes superpuestos con el rango y las cursadas oficiales (`AsignacionEspacio`) proyectadas en cada fecha del rango según `DiaSemana` y vigencia del `CicloLectivo`.
+- **Reglas de privacidad por rol**:
+  - **Solicitante**: Ve las reservas ajenas únicamente como `"Ocupado"` (sin `solicitante`, `motivo` ni `observaciones`) y solo visualiza el detalle completo de sus propias reservas. En los bloqueos ve `"Bloqueado"` sin el motivo administrativo.
+  - **Responsable de Espacio**: Visualiza el detalle completo de las reservas y motivos de bloqueo de los espacios pertenecientes a su departamento (`usuario.DepartamentoId`), y ve como `"Ocupado"` / `"Bloqueado"` los eventos ajenos de otros departamentos.
+  - **Administrador y Secretaría Académica**: Visualizan el detalle completo de todos los eventos y departamentos.
+- **Vistas diaria, semanal y mensual**: No requieren endpoints adicionales; se resuelven directamente con este mismo endpoint enviando el rango `desde` / `hasta` de 1 día (vista diaria), 7 días (vista semanal) o hasta 31 días (vista mensual).
+
 ---
 
 ## 6. Reglas de Negocio, Concurrencia y Persistencia Temporal

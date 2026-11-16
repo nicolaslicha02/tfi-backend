@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<GestionReservas.Application.Features.Notificaciones.INotificacionesService, GestionReservas.Application.Features.Notificaciones.Services.NotificacionesService>();
         services.AddScoped<GestionReservas.Application.Features.Reservas.IReservasService, GestionReservas.Application.Features.Reservas.Services.ReservasService>();
         services.AddScoped<GestionReservas.Application.Features.Bloqueos.IBloqueosService, GestionReservas.Application.Features.Bloqueos.Services.BloqueosService>();
+        services.AddScoped<GestionReservas.Application.Features.Calendario.ICalendarioService, GestionReservas.Application.Features.Calendario.Services.CalendarioService>();
 
         // Registra automáticamente todos los validadores FluentValidation del ensamblado
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);

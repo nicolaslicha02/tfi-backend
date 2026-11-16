@@ -84,46 +84,61 @@ public class DisponibilidadService : IDisponibilidadService
         DateTime hastaUtc,
         CancellationToken cancellationToken = default)
     {
-        var localDesde = DateTimeZoneHelper.ToFacultadLocal(desdeUtc);
-        var localHasta = DateTimeZoneHelper.ToFacultadLocal(hastaUtc);
+        var tramos = ConstruirTramosLocales(desdeUtc, hastaUtc);
+        if (tramos.Count == 0)
+        {
+            return null;
+        }
 
-        var asignaciones = await _context.AsignacionesEspacio
+        var baseQuery = _context.AsignacionesEspacio
             .AsNoTracking()
             .Include(a => a.Comision)
                 .ThenInclude(c => c.Cursada)
                     .ThenInclude(cu => cu.Materia)
             .Include(a => a.Comision)
                 .ThenInclude(c => c.Cursada)
-                    .ThenInclude(cu => cu.CicloLectivo)
-            .Where(a => a.EspacioId == espacioId &&
-                        a.Comision.Cursada.CicloLectivo.Activo)
-            .ToListAsync(cancellationToken);
+                    .ThenInclude(cu => cu.CicloLectivo);
 
-        foreach (var a in asignaciones)
+        if (tramos.Count == 1)
         {
-            var ciclo = a.Comision.Cursada.CicloLectivo;
-            for (var date = localDesde.Date; date <= localHasta.Date; date = date.AddDays(1))
-            {
-                if (date < ciclo.FechaInicio.Date || date > ciclo.FechaFin.Date)
-                    continue;
-
-                if (a.DiaSemana != date.DayOfWeek)
-                    continue;
-
-                var reqInicio = date == localDesde.Date ? localDesde.TimeOfDay : TimeSpan.Zero;
-                var reqFin = date == localHasta.Date ? localHasta.TimeOfDay : TimeSpan.FromDays(1);
-
-                if (reqFin <= reqInicio)
-                    continue;
-
-                if (a.HoraInicio < reqFin && a.HoraFin > reqInicio)
-                {
-                    return a;
-                }
-            }
+            var t = tramos[0];
+            return await baseQuery
+                .Where(a => a.EspacioId == espacioId &&
+                            a.Comision.Cursada.CicloLectivo.Activo &&
+                            a.Comision.Cursada.CicloLectivo.FechaInicio <= t.FechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaFin >= t.FechaCicloUtc &&
+                            a.DiaSemana == t.DiaSemana &&
+                            a.HoraInicio < t.HoraFin &&
+                            a.HoraFin > t.HoraInicio)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
-        return null;
+        IQueryable<int>? idsSuperpuestosQuery = null;
+        foreach (var t in tramos)
+        {
+            var fechaCicloUtc = t.FechaCicloUtc;
+            var diaSemana = t.DiaSemana;
+            var horaInicio = t.HoraInicio;
+            var horaFin = t.HoraFin;
+
+            var tramoIds = _context.AsignacionesEspacio
+                .Where(a => a.EspacioId == espacioId &&
+                            a.Comision.Cursada.CicloLectivo.Activo &&
+                            a.Comision.Cursada.CicloLectivo.FechaInicio <= fechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaFin >= fechaCicloUtc &&
+                            a.DiaSemana == diaSemana &&
+                            a.HoraInicio < horaFin &&
+                            a.HoraFin > horaInicio)
+                .Select(a => a.Id);
+
+            idsSuperpuestosQuery = idsSuperpuestosQuery == null
+                ? tramoIds
+                : idsSuperpuestosQuery.Union(tramoIds);
+        }
+
+        return await baseQuery
+            .Where(a => idsSuperpuestosQuery!.Contains(a.Id))
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public IQueryable<int> ObtenerEspaciosNoDisponiblesQuery(
@@ -149,26 +164,64 @@ public class DisponibilidadService : IDisponibilidadService
             .Where(e => e.FechaBaja != null || e.Estado == EstadoEspacio.FueraDeServicio)
             .Select(e => e.Id);
 
-        // 4. Espacios con asignaciones académicas oficiales recurrentes
+        var resultadoQuery = bloqueosQuery
+            .Union(reservasQuery)
+            .Union(inhabilitadosQuery);
+
+        // 4. Espacios con asignaciones académicas oficiales recurrentes en cualquiera de los días del rango
+        var tramos = ConstruirTramosLocales(desdeUtc, hastaUtc);
+        foreach (var t in tramos)
+        {
+            var fechaCicloUtc = t.FechaCicloUtc;
+            var diaSemana = t.DiaSemana;
+            var horaInicio = t.HoraInicio;
+            var horaFin = t.HoraFin;
+
+            var asignacionesTramoQuery = _context.AsignacionesEspacio
+                .Where(a => a.Comision.Cursada.CicloLectivo.Activo &&
+                            a.Comision.Cursada.CicloLectivo.FechaInicio <= fechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaFin >= fechaCicloUtc &&
+                            a.DiaSemana == diaSemana &&
+                            a.HoraInicio < horaFin &&
+                            a.HoraFin > horaInicio)
+                .Select(a => a.EspacioId);
+
+            resultadoQuery = resultadoQuery.Union(asignacionesTramoQuery);
+        }
+
+        return resultadoQuery;
+    }
+
+    private static List<(DateTime FechaCicloUtc, DayOfWeek DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin)> ConstruirTramosLocales(
+        DateTime desdeUtc,
+        DateTime hastaUtc)
+    {
         var localDesde = DateTimeZoneHelper.ToFacultadLocal(desdeUtc);
         var localHasta = DateTimeZoneHelper.ToFacultadLocal(hastaUtc);
-        var localFechaUtc = DateTime.SpecifyKind(localDesde.Date, DateTimeKind.Utc);
-        var diaSemana = localDesde.DayOfWeek;
-        var horaInicio = localDesde.TimeOfDay;
-        var horaFin = localHasta.TimeOfDay;
 
-        var asignacionesQuery = _context.AsignacionesEspacio
-            .Where(a => a.Comision.Cursada.CicloLectivo.Activo &&
-                        a.Comision.Cursada.CicloLectivo.FechaInicio <= localFechaUtc &&
-                        a.Comision.Cursada.CicloLectivo.FechaFin >= localFechaUtc &&
-                        a.DiaSemana == diaSemana &&
-                        a.HoraInicio < horaFin &&
-                        a.HoraFin > horaInicio)
-            .Select(a => a.EspacioId);
+        var tramos = new List<(DateTime FechaCicloUtc, DayOfWeek DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin)>();
+        var diasCompletosVistos = new HashSet<DayOfWeek>();
 
-        return bloqueosQuery
-            .Union(reservasQuery)
-            .Union(inhabilitadosQuery)
-            .Union(asignacionesQuery);
+        for (var date = localDesde.Date; date <= localHasta.Date; date = date.AddDays(1))
+        {
+            var reqInicio = date == localDesde.Date ? localDesde.TimeOfDay : TimeSpan.Zero;
+            var reqFin = date == localHasta.Date ? localHasta.TimeOfDay : TimeSpan.FromDays(1);
+
+            if (reqFin <= reqInicio)
+            {
+                continue;
+            }
+
+            var esDiaCompleto = reqInicio == TimeSpan.Zero && reqFin == TimeSpan.FromDays(1);
+            if (esDiaCompleto && !diasCompletosVistos.Add(date.DayOfWeek))
+            {
+                continue;
+            }
+
+            var fechaCicloUtc = DateTime.SpecifyKind(date, DateTimeKind.Utc);
+            tramos.Add((fechaCicloUtc, date.DayOfWeek, reqInicio, reqFin));
+        }
+
+        return tramos;
     }
 }
