@@ -1,4 +1,4 @@
-using GestionReservas.Infrastructure.Persistence;
+using GestionReservas.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GestionReservas.Api.Controllers;
@@ -10,10 +10,10 @@ namespace GestionReservas.Api.Controllers;
 [Route("[controller]")]
 public class HealthController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IApplicationDbContext _context;
     private readonly ILogger<HealthController> _logger;
 
-    public HealthController(ApplicationDbContext context, ILogger<HealthController> logger)
+    public HealthController(IApplicationDbContext context, ILogger<HealthController> logger)
     {
         _context = context;
         _logger = logger;
