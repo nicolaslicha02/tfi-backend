@@ -596,4 +596,254 @@ public class EspaciosEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         Assert.NotNull(searchPaged);
         Assert.Contains(searchPaged.Items, e => e.Codigo == "AULA-101");
     }
+
+    private async Task<(int EspacioId, string Codigo)> CrearFixtureEspacioConReservaFuturaAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+        var codigo = $"UPD-PROT-{Guid.NewGuid().ToString("N")[..6].ToUpper()}";
+
+        var espacio = new Espacio
+        {
+            Codigo = codigo,
+            Nombre = "Espacio Protegido Original",
+            Edificio = "Edificio Protección",
+            Piso = 1,
+            Sector = "Sector Original",
+            CapacidadMaxima = 40,
+            DepartamentoId = 1,
+            TipoEspacioId = 1,
+            Estado = EstadoEspacio.Disponible
+        };
+        espacio.Equipamientos.Add(new EspacioEquipamiento
+        {
+            EquipamientoId = 1,
+            Cantidad = 2,
+            ValorOpcional = "Full HD"
+        });
+        espacio.Equipamientos.Add(new EspacioEquipamiento
+        {
+            EquipamientoId = 5,
+            Cantidad = 1,
+            ValorOpcional = "PC Docente"
+        });
+
+        db.Espacios.Add(espacio);
+        await db.SaveChangesAsync();
+
+        var reserva = new Reserva
+        {
+            EspacioId = espacio.Id,
+            SolicitanteId = 1,
+            FechaHoraInicio = DateTime.UtcNow.AddDays(10),
+            FechaHoraFin = DateTime.UtcNow.AddDays(10).AddHours(2),
+            TipoActividad = TipoActividad.Clase,
+            AsistentesEstimados = 25,
+            Motivo = "Reserva futura comprometida",
+            Estado = EstadoReserva.Aprobada,
+            FechaSolicitud = DateTime.UtcNow
+        };
+        reserva.EquipamientosRequeridos.Add(new ReservaEquipamiento
+        {
+            EquipamientoId = 1,
+            CantidadRequerida = 2
+        });
+
+        db.Reservas.Add(reserva);
+        await db.SaveChangesAsync();
+
+        return (espacio.Id, codigo);
+    }
+
+    private async Task VerificarEspacioIntactoEnBaseAsync(int espacioId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+        var espacioDb = await db.Espacios
+            .AsNoTracking()
+            .Include(e => e.Equipamientos)
+            .FirstAsync(e => e.Id == espacioId);
+
+        Assert.Equal(EstadoEspacio.Disponible, espacioDb.Estado);
+        Assert.Equal(40, espacioDb.CapacidadMaxima);
+        Assert.Equal("Espacio Protegido Original", espacioDb.Nombre);
+        Assert.Equal("Sector Original", espacioDb.Sector);
+        Assert.Equal(2, espacioDb.Equipamientos.Count);
+        Assert.Contains(espacioDb.Equipamientos, eq => eq.EquipamientoId == 1 && eq.Cantidad == 2);
+        Assert.Contains(espacioDb.Equipamientos, eq => eq.EquipamientoId == 5 && eq.Cantidad == 1);
+    }
+
+    [Fact]
+    public async Task ActualizarEspacio_ConReservaFutura_ImpideFueraDeServicioOReducirCapacidadOQuitarEquipamiento_Devuelve409()
+    {
+        var tokenAdmin = await ObtenerTokenAsync("admin@facultad.edu.ar", "Admin123!");
+
+        // Escenario 1: Pasar a FueraDeServicio con reserva futura activa -> 409 Conflict
+        var (espacioId1, codigo1) = await CrearFixtureEspacioConReservaFuturaAsync();
+        var reqFueraServicio = new ActualizarEspacioRequestDto
+        {
+            Codigo = codigo1,
+            Nombre = "Intento Fuera de Servicio",
+            TipoEspacioId = 1,
+            Edificio = "Edificio Protección",
+            Piso = 1,
+            Sector = "Sector Modificado",
+            CapacidadMaxima = 40,
+            DepartamentoId = 1,
+            Estado = EstadoEspacio.FueraDeServicio,
+            Equipamientos = new List<EspacioEquipamientoInputDto>
+            {
+                new() { EquipamientoId = 1, Cantidad = 2, Especificacion = "Full HD" },
+                new() { EquipamientoId = 5, Cantidad = 1, Especificacion = "PC Docente" }
+            }
+        };
+        var msg1 = new HttpRequestMessage(HttpMethod.Put, $"/api/espacios/{espacioId1}")
+        {
+            Content = JsonContent.Create(reqFueraServicio)
+        };
+        msg1.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+        var res1 = await _client.SendAsync(msg1);
+        Assert.Equal(HttpStatusCode.Conflict, res1.StatusCode);
+        await VerificarEspacioIntactoEnBaseAsync(espacioId1);
+
+        // Escenario 2: Reducir CapacidadMaxima (20) por debajo de AsistentesEstimados (25) -> 409 Conflict
+        var (espacioId2, codigo2) = await CrearFixtureEspacioConReservaFuturaAsync();
+        var reqMenorCapacidad = new ActualizarEspacioRequestDto
+        {
+            Codigo = codigo2,
+            Nombre = "Intento Reducir Capacidad",
+            TipoEspacioId = 1,
+            Edificio = "Edificio Protección",
+            Piso = 1,
+            Sector = "Sector Modificado",
+            CapacidadMaxima = 20,
+            DepartamentoId = 1,
+            Estado = EstadoEspacio.Disponible,
+            Equipamientos = new List<EspacioEquipamientoInputDto>
+            {
+                new() { EquipamientoId = 1, Cantidad = 2, Especificacion = "Full HD" },
+                new() { EquipamientoId = 5, Cantidad = 1, Especificacion = "PC Docente" }
+            }
+        };
+        var msg2 = new HttpRequestMessage(HttpMethod.Put, $"/api/espacios/{espacioId2}")
+        {
+            Content = JsonContent.Create(reqMenorCapacidad)
+        };
+        msg2.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+        var res2 = await _client.SendAsync(msg2);
+        Assert.Equal(HttpStatusCode.Conflict, res2.StatusCode);
+        await VerificarEspacioIntactoEnBaseAsync(espacioId2);
+
+        // Escenario 3: Quitar equipamiento requerido (EquipamientoId = 1) -> 409 Conflict
+        var (espacioId3, codigo3) = await CrearFixtureEspacioConReservaFuturaAsync();
+        var reqSinEquipamiento = new ActualizarEspacioRequestDto
+        {
+            Codigo = codigo3,
+            Nombre = "Intento Quitar Equipamiento",
+            TipoEspacioId = 1,
+            Edificio = "Edificio Protección",
+            Piso = 1,
+            Sector = "Sector Modificado",
+            CapacidadMaxima = 40,
+            DepartamentoId = 1,
+            Estado = EstadoEspacio.Disponible,
+            Equipamientos = new List<EspacioEquipamientoInputDto>
+            {
+                new() { EquipamientoId = 5, Cantidad = 1, Especificacion = "PC Docente" }
+            }
+        };
+        var msg3 = new HttpRequestMessage(HttpMethod.Put, $"/api/espacios/{espacioId3}")
+        {
+            Content = JsonContent.Create(reqSinEquipamiento)
+        };
+        msg3.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+        var res3 = await _client.SendAsync(msg3);
+        Assert.Equal(HttpStatusCode.Conflict, res3.StatusCode);
+        await VerificarEspacioIntactoEnBaseAsync(espacioId3);
+    }
+
+    [Fact]
+    public async Task ActualizarEspacio_ConReservaFutura_EditarNombreOSectorSinComprometerReserva_Devuelve200OK()
+    {
+        var tokenAdmin = await ObtenerTokenAsync("admin@facultad.edu.ar", "Admin123!");
+        var (espacioId, codigo) = await CrearFixtureEspacioConReservaFuturaAsync();
+
+        var reqValido = new ActualizarEspacioRequestDto
+        {
+            Codigo = codigo,
+            Nombre = "Nombre Actualizado Con Reserva Activa",
+            TipoEspacioId = 1,
+            Edificio = "Edificio Protección",
+            Piso = 3,
+            Sector = "Ala Oeste Renovada",
+            CapacidadMaxima = 50,
+            DepartamentoId = 1,
+            Estado = EstadoEspacio.Disponible,
+            Equipamientos = new List<EspacioEquipamientoInputDto>
+            {
+                new() { EquipamientoId = 1, Cantidad = 3, Especificacion = "Full HD" },
+                new() { EquipamientoId = 5, Cantidad = 1, Especificacion = "PC Docente" }
+            }
+        };
+
+        var msg = new HttpRequestMessage(HttpMethod.Put, $"/api/espacios/{espacioId}")
+        {
+            Content = JsonContent.Create(reqValido)
+        };
+        msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+        var response = await _client.SendAsync(msg);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var actualizado = await response.Content.ReadFromJsonAsync<EspacioDetalleDto>();
+        Assert.NotNull(actualizado);
+        Assert.Equal("Nombre Actualizado Con Reserva Activa", actualizado.Nombre);
+        Assert.Equal("Ala Oeste Renovada", actualizado.Sector);
+        Assert.Equal(3, actualizado.Piso);
+        Assert.Equal(50, actualizado.CapacidadMaxima);
+    }
+
+    [Fact]
+    public async Task GetEspacios_IncluirBajas_SolicitanteNoVeBajas_AdministradorSiLasVe()
+    {
+        var tokenAdmin = await ObtenerTokenAsync("admin@facultad.edu.ar", "Admin123!");
+        var tokenSolicitante = await ObtenerTokenAsync("docente.perez@facultad.edu.ar", "Docente123!");
+        var codigoBaja = $"BAJA-VIS-{Guid.NewGuid().ToString("N")[..6].ToUpper()}";
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            db.Espacios.Add(new Espacio
+            {
+                Codigo = codigoBaja,
+                Nombre = "Espacio Dado De Baja Visibilidad",
+                Edificio = "Edificio Baja",
+                Piso = 1,
+                Sector = "Sur",
+                CapacidadMaxima = 30,
+                DepartamentoId = 1,
+                TipoEspacioId = 1,
+                Estado = EstadoEspacio.Disponible,
+                FechaBaja = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // 1. Solicitante consulta con incluirBajas=true -> se ignora y NO ve el espacio dado de baja
+        var msgSol = new HttpRequestMessage(HttpMethod.Get, $"/api/espacios?incluirBajas=true&search={codigoBaja}");
+        msgSol.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenSolicitante);
+        var resSol = await _client.SendAsync(msgSol);
+        Assert.Equal(HttpStatusCode.OK, resSol.StatusCode);
+        var pagedSol = await resSol.Content.ReadFromJsonAsync<PagedResultDto<EspacioListadoDto>>();
+        Assert.NotNull(pagedSol);
+        Assert.DoesNotContain(pagedSol.Items, e => e.Codigo == codigoBaja);
+
+        // 2. Administrador consulta con incluirBajas=true -> SÍ ve el espacio dado de baja
+        var msgAdmin = new HttpRequestMessage(HttpMethod.Get, $"/api/espacios?incluirBajas=true&search={codigoBaja}");
+        msgAdmin.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+        var resAdmin = await _client.SendAsync(msgAdmin);
+        Assert.Equal(HttpStatusCode.OK, resAdmin.StatusCode);
+        var pagedAdmin = await resAdmin.Content.ReadFromJsonAsync<PagedResultDto<EspacioListadoDto>>();
+        Assert.NotNull(pagedAdmin);
+        Assert.Contains(pagedAdmin.Items, e => e.Codigo == codigoBaja && e.EsBaja);
+    }
 }

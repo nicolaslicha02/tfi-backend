@@ -394,4 +394,74 @@ public class UsuariosAndCatalogosEndpointsTests : IClassFixture<CustomWebApplica
         Assert.True(tipos.Count >= 4);
         Assert.Contains(tipos, t => t.Nombre.Contains("Laboratorio"));
     }
+
+    [Fact]
+    public async Task GetDepartamentos_CantidadEspacios_CuentaSoloActivosYExcluyeBajas()
+    {
+        var token = await ObtenerTokenAsync("docente.perez@facultad.edu.ar", "Docente123!");
+        int deptoId;
+        var sufijo = Guid.NewGuid().ToString("N")[..6].ToUpper();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var depto = new Departamento
+            {
+                Nombre = $"Depto Conteo Test {sufijo}",
+                Descripcion = "Departamento aislado para verificar CantidadEspacios"
+            };
+            db.Departamentos.Add(depto);
+            await db.SaveChangesAsync();
+            deptoId = depto.Id;
+
+            db.Espacios.AddRange(
+                new Espacio
+                {
+                    Codigo = $"CNT-A1-{sufijo}",
+                    Nombre = "Espacio Activo 1",
+                    Edificio = "Test",
+                    Piso = 1,
+                    Sector = "A",
+                    CapacidadMaxima = 30,
+                    DepartamentoId = deptoId,
+                    TipoEspacioId = 1,
+                    FechaBaja = null
+                },
+                new Espacio
+                {
+                    Codigo = $"CNT-A2-{sufijo}",
+                    Nombre = "Espacio Activo 2",
+                    Edificio = "Test",
+                    Piso = 1,
+                    Sector = "A",
+                    CapacidadMaxima = 40,
+                    DepartamentoId = deptoId,
+                    TipoEspacioId = 1,
+                    FechaBaja = null
+                },
+                new Espacio
+                {
+                    Codigo = $"CNT-B1-{sufijo}",
+                    Nombre = "Espacio Dado de Baja",
+                    Edificio = "Test",
+                    Piso = 1,
+                    Sector = "A",
+                    CapacidadMaxima = 50,
+                    DepartamentoId = deptoId,
+                    TipoEspacioId = 1,
+                    FechaBaja = DateTime.UtcNow
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var req = new HttpRequestMessage(HttpMethod.Get, "/api/departamentos");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var res = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        var deptos = await res.Content.ReadFromJsonAsync<List<DepartamentoDto>>();
+        Assert.NotNull(deptos);
+        var deptoDto = Assert.Single(deptos, d => d.Id == deptoId);
+        Assert.Equal(2, deptoDto.CantidadEspacios);
+    }
 }

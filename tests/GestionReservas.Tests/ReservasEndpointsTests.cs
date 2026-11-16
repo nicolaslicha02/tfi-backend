@@ -379,4 +379,110 @@ public class ReservasEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         var cancelarResp = await SendAsync(docente, new HttpMethod("PATCH"), $"/api/reservas/{ajena.Id}", new { accion = "cancelar", motivo = "Intento de cancelación ajena" });
         Assert.Equal(HttpStatusCode.Forbidden, cancelarResp.StatusCode);
     }
+
+    [Fact]
+    public async Task GetReservaById_VerificaPermisosPropiedadYAlcanceDepartamental()
+    {
+        int espacioDepto1Id;
+        int espacioDepto2Id;
+        string tokenSinPermisoReservas;
+        string tokenOtroSolicitante;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var hasher = scope.ServiceProvider.GetRequiredService<GestionReservas.Application.Common.Interfaces.IPasswordHasher>();
+            var jwtService = scope.ServiceProvider.GetRequiredService<GestionReservas.Application.Common.Interfaces.IJwtTokenService>();
+
+            var esp1 = new Espacio
+            {
+                Codigo = $"R1-{Guid.NewGuid().ToString("N")[..6].ToUpper()}",
+                Nombre = "Espacio Depto 1",
+                Edificio = "Test",
+                Piso = 1,
+                Sector = "A",
+                CapacidadMaxima = 40,
+                Estado = EstadoEspacio.Disponible,
+                DepartamentoId = 1, // Sistemas
+                TipoEspacioId = 1
+            };
+            esp1.Equipamientos.Add(new EspacioEquipamiento { EquipamientoId = 1, Cantidad = 1 });
+
+            var esp2 = new Espacio
+            {
+                Codigo = $"R2-{Guid.NewGuid().ToString("N")[..6].ToUpper()}",
+                Nombre = "Espacio Depto 2",
+                Edificio = "Test",
+                Piso = 1,
+                Sector = "B",
+                CapacidadMaxima = 40,
+                Estado = EstadoEspacio.Disponible,
+                DepartamentoId = 2, // Ciencias Básicas
+                TipoEspacioId = 1
+            };
+            esp2.Equipamientos.Add(new EspacioEquipamiento { EquipamientoId = 1, Cantidad = 1 });
+
+            db.Espacios.AddRange(esp1, esp2);
+
+            // Crear un segundo solicitante real para verificar aislamiento entre solicitantes
+            var rolSolicitante = await db.Roles.FirstAsync(r => r.Nombre == "Solicitante");
+            var otroSolEmail = $"otro.sol.{Guid.NewGuid():N}@facultad.edu.ar";
+            var otroUsuario = new Usuario
+            {
+                Nombre = "Otro",
+                Apellido = "Solicitante",
+                NombreCompleto = "Otro Solicitante",
+                Email = otroSolEmail,
+                PasswordHash = hasher.HashPassword("Solicitante123!"),
+                Activo = true,
+                FechaCreacion = DateTime.UtcNow
+            };
+            db.Usuarios.Add(otroUsuario);
+            await db.SaveChangesAsync();
+
+            db.UsuarioRoles.Add(new UsuarioRol { UsuarioId = otroUsuario.Id, RolId = rolSolicitante.Id });
+            await db.SaveChangesAsync();
+
+            espacioDepto1Id = esp1.Id;
+            espacioDepto2Id = esp2.Id;
+
+            // Token válido de un usuario autenticado sin permisos reservas.ver_propias ni reservas.ver_pendientes
+            tokenSinPermisoReservas = jwtService.GenerateToken(
+                otroUsuario,
+                new[] { "Invitado" },
+                new[] { "espacios.ver" },
+                out _);
+
+            tokenOtroSolicitante = await TokenAsync(otroSolEmail, "Solicitante123!");
+        }
+
+        var d = Dia();
+        var duenoDocente = await DocenteAsync();
+        var responsableSistemas = await ResponsableAsync(); // Departamento 1 (Sistemas)
+
+        var resDepto1 = await CrearPendienteAsync(duenoDocente, espacioDepto1Id, d.AddHours(10), d.AddHours(12));
+        var resDepto2 = await CrearPendienteAsync(duenoDocente, espacioDepto2Id, d.AddHours(14), d.AddHours(16));
+
+        // 1. Usuario autenticado sin permiso reservas.ver_propias ni reservas.ver_pendientes -> 403 Forbidden
+        var respSinPermiso = await SendAsync(tokenSinPermisoReservas, HttpMethod.Get, $"/api/reservas/{resDepto1.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, respSinPermiso.StatusCode);
+
+        // 2. Solicitante consultando la reserva de otro solicitante -> 403 Forbidden
+        var respOtroSolicitante = await SendAsync(tokenOtroSolicitante, HttpMethod.Get, $"/api/reservas/{resDepto1.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, respOtroSolicitante.StatusCode);
+
+        // 3. Responsable de otro departamento (Sistemas = 1) consultando reserva de Ciencias Básicas (2) -> 403 Forbidden
+        var respDeptoAjeno = await SendAsync(responsableSistemas, HttpMethod.Get, $"/api/reservas/{resDepto2.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, respDeptoDeptoAjenoStatusCode(respDeptoAjeno));
+
+        // 4. El dueño de la reserva -> 200 OK
+        var respDueno = await SendAsync(duenoDocente, HttpMethod.Get, $"/api/reservas/{resDepto1.Id}");
+        Assert.Equal(HttpStatusCode.OK, respDueno.StatusCode);
+
+        // 5. El responsable del departamento correcto (Sistemas = 1) -> 200 OK
+        var respResponsableCorrecto = await SendAsync(responsableSistemas, HttpMethod.Get, $"/api/reservas/{resDepto1.Id}");
+        Assert.Equal(HttpStatusCode.OK, respResponsableCorrecto.StatusCode);
+    }
+
+    private static HttpStatusCode respDeptoDeptoAjenoStatusCode(HttpResponseMessage response) => response.StatusCode;
 }
