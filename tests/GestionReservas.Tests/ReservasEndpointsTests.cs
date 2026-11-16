@@ -35,6 +35,7 @@ public class ReservasEndpointsTests : IClassFixture<CustomWebApplicationFactory>
     private Task<string> DocenteAsync() => TokenAsync("docente.perez@facultad.edu.ar", "Docente123!");
     private Task<string> AdminAsync() => TokenAsync("admin@facultad.edu.ar", "Admin123!");
     private Task<string> ResponsableAsync() => TokenAsync("responsable.sistemas@facultad.edu.ar", "Responsable123!");
+    private Task<string> SecretariaAsync() => TokenAsync("secretaria@facultad.edu.ar", "Secretaria123!");
 
     private Task<HttpResponseMessage> SendAsync(string token, HttpMethod method, string url, object? body = null)
     {
@@ -304,5 +305,78 @@ public class ReservasEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         var r = await SendAsync(admin, new HttpMethod("PATCH"), $"/api/reservas/{reservaPasadaId}", new { accion = "aprobar" });
 
         Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancelar_ReservaAprobadaSinMotivo_Devuelve400BadRequest()
+    {
+        var espacio = await CrearEspacioAsync();
+        var d = Dia();
+        var docente = await DocenteAsync();
+        var admin = await AdminAsync();
+
+        var res = await CrearPendienteAsync(docente, espacio, d.AddHours(10), d.AddHours(12));
+        var aprob = await SendAsync(admin, new HttpMethod("PATCH"), $"/api/reservas/{res.Id}", new { accion = "aprobar" });
+        Assert.Equal(HttpStatusCode.OK, aprob.StatusCode);
+
+        // Intentar cancelar reserva APROBADA sin motivo -> 400 Bad Request
+        var sinMotivo = await SendAsync(docente, new HttpMethod("PATCH"), $"/api/reservas/{res.Id}", new { accion = "cancelar" });
+        Assert.Equal(HttpStatusCode.BadRequest, sinMotivo.StatusCode);
+
+        // Con motivo -> 200 OK
+        var conMotivo = await SendAsync(docente, new HttpMethod("PATCH"), $"/api/reservas/{res.Id}", new { accion = "cancelar", motivo = "Suspensión de actividad por viaje" });
+        Assert.Equal(HttpStatusCode.OK, conMotivo.StatusCode);
+        var detalle = await conMotivo.Content.ReadFromJsonAsync<ReservaDetalleDto>();
+        Assert.Equal(EstadoReserva.Cancelada, detalle!.Estado);
+    }
+
+    [Fact]
+    public async Task IntervencionExcepcionalSecretaria_SobreEspacioDeOtroDepartamento_ExigeMotivoYQuedaEnAuditoria()
+    {
+        // Espacio del Departamento 2 (Ciencias Básicas), distinto al Departamento de Secretaría Académica (3)
+        var espacio = await CrearEspacioAsync();
+        var d = Dia();
+        var docente = await DocenteAsync();
+        var secretaria = await SecretariaAsync();
+
+        var res = await CrearPendienteAsync(docente, espacio, d.AddHours(14), d.AddHours(16));
+
+        // 1. Sin motivo -> 400 Bad Request por tratarse de intervención excepcional
+        var sinMotivo = await SendAsync(secretaria, new HttpMethod("PATCH"), $"/api/reservas/{res.Id}", new { accion = "aprobar" });
+        Assert.Equal(HttpStatusCode.BadRequest, sinMotivo.StatusCode);
+
+        // 2. Con motivo -> 200 OK y queda registrado en auditoría como intervención excepcional
+        const string motivoExcepcional = "Intervención excepcional por falta de cupo departamental";
+        var conMotivo = await SendAsync(secretaria, new HttpMethod("PATCH"), $"/api/reservas/{res.Id}", new { accion = "aprobar", motivo = motivoExcepcional });
+        Assert.Equal(HttpStatusCode.OK, conMotivo.StatusCode);
+
+        var detalle = await conMotivo.Content.ReadFromJsonAsync<ReservaDetalleDto>();
+        Assert.NotNull(detalle);
+        Assert.Equal(EstadoReserva.Aprobada, detalle.Estado);
+        Assert.Contains(detalle.HistorialCambios, a =>
+            a.Accion == "AprobarReserva (Intervención excepcional)" &&
+            a.Motivo == motivoExcepcional);
+    }
+
+    [Fact]
+    public async Task Solicitante_NoPuedeVerNiCancelarReservaDeOtro_Devuelve403Forbidden()
+    {
+        var espacio = await CrearEspacioAsync();
+        var d = Dia();
+        var admin = await AdminAsync();
+        var docente = await DocenteAsync();
+
+        // Admin crea una reserva (su propietario es admin, no docente.perez)
+        var ajenaResp = await SendAsync(admin, HttpMethod.Post, "/api/reservas", Req(espacio, d.AddHours(10), d.AddHours(12)));
+        Assert.Equal(HttpStatusCode.Created, ajenaResp.StatusCode);
+        var ajena = await ajenaResp.Content.ReadFromJsonAsync<ReservaDetalleDto>();
+
+        // 1. Solicitante intenta ver el detalle de la reserva ajena -> 403 Forbidden
+        var verResp = await SendAsync(docente, HttpMethod.Get, $"/api/reservas/{ajena!.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, verResp.StatusCode);
+
+        // 2. Solicitante intenta cancelar la reserva ajena -> 403 Forbidden
+        var cancelarResp = await SendAsync(docente, new HttpMethod("PATCH"), $"/api/reservas/{ajena.Id}", new { accion = "cancelar", motivo = "Intento de cancelación ajena" });
+        Assert.Equal(HttpStatusCode.Forbidden, cancelarResp.StatusCode);
     }
 }
