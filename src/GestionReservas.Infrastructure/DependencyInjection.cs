@@ -68,6 +68,7 @@ public static class DependencyInjection
         var jwtIssuer = jwtSection["Issuer"] ?? "GestionReservasApi";
         var jwtAudience = jwtSection["Audience"] ?? "GestionReservasClient";
 
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();

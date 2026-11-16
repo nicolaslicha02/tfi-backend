@@ -10,7 +10,6 @@ using GestionReservas.Application.Features.Espacios;
 using GestionReservas.Application.Features.Espacios.Services;
 using GestionReservas.Application.Features.Usuarios;
 using GestionReservas.Application.Features.Usuarios.Services;
-using GestionReservas.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GestionReservas.Application;
@@ -19,7 +18,6 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAuditoriaService, AuditoriaService>();
         services.AddScoped<ICatalogosService, CatalogosService>();

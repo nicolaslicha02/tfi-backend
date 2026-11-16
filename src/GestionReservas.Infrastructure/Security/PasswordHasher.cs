@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using GestionReservas.Application.Common.Interfaces;
 
-namespace GestionReservas.Application.Services;
+namespace GestionReservas.Infrastructure.Security;
 
 /// <summary>
 /// Implementación criptográfica estándar de hash de contraseñas mediante PBKDF2 con HMAC-SHA256 y sal aleatoria.
