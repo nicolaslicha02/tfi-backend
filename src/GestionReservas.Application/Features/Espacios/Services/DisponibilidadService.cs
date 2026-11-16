@@ -105,8 +105,8 @@ public class DisponibilidadService : IDisponibilidadService
             return await baseQuery
                 .Where(a => a.EspacioId == espacioId &&
                             a.Comision.Cursada.CicloLectivo.Activo &&
-                            a.Comision.Cursada.CicloLectivo.FechaInicio <= t.FechaCicloUtc &&
-                            a.Comision.Cursada.CicloLectivo.FechaFin >= t.FechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaInicio <= t.MaxFechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaFin >= t.MinFechaCicloUtc &&
                             a.DiaSemana == t.DiaSemana &&
                             a.HoraInicio < t.HoraFin &&
                             a.HoraFin > t.HoraInicio)
@@ -116,7 +116,8 @@ public class DisponibilidadService : IDisponibilidadService
         IQueryable<int>? idsSuperpuestosQuery = null;
         foreach (var t in tramos)
         {
-            var fechaCicloUtc = t.FechaCicloUtc;
+            var minFechaCicloUtc = t.MinFechaCicloUtc;
+            var maxFechaCicloUtc = t.MaxFechaCicloUtc;
             var diaSemana = t.DiaSemana;
             var horaInicio = t.HoraInicio;
             var horaFin = t.HoraFin;
@@ -124,8 +125,8 @@ public class DisponibilidadService : IDisponibilidadService
             var tramoIds = _context.AsignacionesEspacio
                 .Where(a => a.EspacioId == espacioId &&
                             a.Comision.Cursada.CicloLectivo.Activo &&
-                            a.Comision.Cursada.CicloLectivo.FechaInicio <= fechaCicloUtc &&
-                            a.Comision.Cursada.CicloLectivo.FechaFin >= fechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaInicio <= maxFechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaFin >= minFechaCicloUtc &&
                             a.DiaSemana == diaSemana &&
                             a.HoraInicio < horaFin &&
                             a.HoraFin > horaInicio)
@@ -172,15 +173,16 @@ public class DisponibilidadService : IDisponibilidadService
         var tramos = ConstruirTramosLocales(desdeUtc, hastaUtc);
         foreach (var t in tramos)
         {
-            var fechaCicloUtc = t.FechaCicloUtc;
+            var minFechaCicloUtc = t.MinFechaCicloUtc;
+            var maxFechaCicloUtc = t.MaxFechaCicloUtc;
             var diaSemana = t.DiaSemana;
             var horaInicio = t.HoraInicio;
             var horaFin = t.HoraFin;
 
             var asignacionesTramoQuery = _context.AsignacionesEspacio
                 .Where(a => a.Comision.Cursada.CicloLectivo.Activo &&
-                            a.Comision.Cursada.CicloLectivo.FechaInicio <= fechaCicloUtc &&
-                            a.Comision.Cursada.CicloLectivo.FechaFin >= fechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaInicio <= maxFechaCicloUtc &&
+                            a.Comision.Cursada.CicloLectivo.FechaFin >= minFechaCicloUtc &&
                             a.DiaSemana == diaSemana &&
                             a.HoraInicio < horaFin &&
                             a.HoraFin > horaInicio)
@@ -192,15 +194,16 @@ public class DisponibilidadService : IDisponibilidadService
         return resultadoQuery;
     }
 
-    private static List<(DateTime FechaCicloUtc, DayOfWeek DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin)> ConstruirTramosLocales(
+    private static List<(DateTime MinFechaCicloUtc, DateTime MaxFechaCicloUtc, DayOfWeek DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin)> ConstruirTramosLocales(
         DateTime desdeUtc,
         DateTime hastaUtc)
     {
         var localDesde = DateTimeZoneHelper.ToFacultadLocal(desdeUtc);
         var localHasta = DateTimeZoneHelper.ToFacultadLocal(hastaUtc);
 
-        var tramos = new List<(DateTime FechaCicloUtc, DayOfWeek DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin)>();
-        var diasCompletosVistos = new HashSet<DayOfWeek>();
+        var tramos = new List<(DateTime MinFechaCicloUtc, DateTime MaxFechaCicloUtc, DayOfWeek DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin)>();
+        // Índice en 'tramos' del tramo consolidado de días completos para cada día de la semana
+        var indiceDiaCompleto = new Dictionary<DayOfWeek, int>();
 
         for (var date = localDesde.Date; date <= localHasta.Date; date = date.AddDays(1))
         {
@@ -212,14 +215,23 @@ public class DisponibilidadService : IDisponibilidadService
                 continue;
             }
 
+            var fechaCicloUtc = DateTime.SpecifyKind(date, DateTimeKind.Utc);
             var esDiaCompleto = reqInicio == TimeSpan.Zero && reqFin == TimeSpan.FromDays(1);
-            if (esDiaCompleto && !diasCompletosVistos.Add(date.DayOfWeek))
+
+            if (esDiaCompleto && indiceDiaCompleto.TryGetValue(date.DayOfWeek, out var indice))
             {
+                // Mismo día de la semana ya consolidado: conservar la fecha mínima y extender la máxima
+                var existente = tramos[indice];
+                tramos[indice] = (existente.MinFechaCicloUtc, fechaCicloUtc, existente.DiaSemana, existente.HoraInicio, existente.HoraFin);
                 continue;
             }
 
-            var fechaCicloUtc = DateTime.SpecifyKind(date, DateTimeKind.Utc);
-            tramos.Add((fechaCicloUtc, date.DayOfWeek, reqInicio, reqFin));
+            if (esDiaCompleto)
+            {
+                indiceDiaCompleto[date.DayOfWeek] = tramos.Count;
+            }
+
+            tramos.Add((fechaCicloUtc, fechaCicloUtc, date.DayOfWeek, reqInicio, reqFin));
         }
 
         return tramos;
