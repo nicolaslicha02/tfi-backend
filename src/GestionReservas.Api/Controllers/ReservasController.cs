@@ -26,6 +26,11 @@ public class ReservasController : ControllerBase
     [HttpPost("api/reservas")]
     [Authorize(Policy = PermisosDefinidos.ReservasSolicitar)]
     [ProducesResponseType(typeof(ReservaDetalleDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ReservaDetalleDto>> Crear([FromBody] CrearReservaRequestDto request, CancellationToken ct)
     {
         var result = await _reservasService.CreateReservaAsync(request, ct);
@@ -35,6 +40,10 @@ public class ReservasController : ControllerBase
     /// <summary>Reservas del usuario autenticado, paginadas.</summary>
     [HttpGet("api/mis-reservas")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPropias)]
+    [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> MisReservas([FromQuery] MisReservasQueryParameters query, CancellationToken ct)
         => Ok(await _reservasService.GetMisReservasAsync(query, ct));
 
@@ -42,7 +51,9 @@ public class ReservasController : ControllerBase
     [HttpGet("api/reservas")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
     [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> GetReservas([FromQuery] ReservasQueryParameters query, CancellationToken ct)
         => Ok(await _reservasService.GetReservasAdministrativasAsync(query, ct));
 
@@ -50,6 +61,9 @@ public class ReservasController : ControllerBase
     [HttpGet("api/reservas/pendientes")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
     [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> Pendientes(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -60,6 +74,9 @@ public class ReservasController : ControllerBase
     [HttpGet("api/reservas/canceladas")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
     [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> Canceladas(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -70,6 +87,9 @@ public class ReservasController : ControllerBase
     [HttpGet("api/reservas/rechazadas")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
     [ProducesResponseType(typeof(PagedResultDto<ReservaListadoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> Rechazadas(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -78,17 +98,33 @@ public class ReservasController : ControllerBase
 
     /// <summary>Detalle de una reserva con su historial de cambios (solicitante, responsable, Secretaría o Admin).</summary>
     [HttpGet("api/reservas/{id:int}")]
+    [ProducesResponseType(typeof(ReservaDetalleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ReservaDetalleDto>> ObtenerPorId(int id, CancellationToken ct)
         => Ok(await _reservasService.GetReservaByIdAsync(id, ct));
 
     /// <summary>Cambia el estado: accion = aprobar | rechazar | cancelar.</summary>
     [HttpPatch("api/reservas/{id:int}")]
+    [ProducesResponseType(typeof(ReservaDetalleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ReservaDetalleDto>> CambiarEstado(int id, [FromBody] CambiarEstadoReservaRequestDto request, CancellationToken ct)
         => Ok(await _reservasService.CambiarEstadoReservaAsync(id, request, ct));
 
     /// <summary>Modifica una reserva; si estaba aprobada vuelve a pendiente.</summary>
     [HttpPut("api/reservas/{id:int}")]
     [Authorize(Policy = PermisosDefinidos.ReservasModificar)]
+    [ProducesResponseType(typeof(ReservaDetalleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ReservaDetalleDto>> Modificar(int id, [FromBody] ActualizarReservaRequestDto request, CancellationToken ct)
         => Ok(await _reservasService.UpdateReservaAsync(id, request, ct));
 }

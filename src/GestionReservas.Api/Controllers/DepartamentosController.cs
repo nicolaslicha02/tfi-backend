@@ -28,7 +28,8 @@ public class DepartamentosController : ControllerBase
     /// <response code="401">El usuario no está autenticado.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<DepartamentoDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<DepartamentoDto>>> GetAll(CancellationToken cancellationToken)
     {
         var departamentos = await _catalogosService.GetDepartamentosAsync(cancellationToken);

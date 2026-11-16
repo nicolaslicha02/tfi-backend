@@ -30,10 +30,11 @@ public class BloqueosController : ControllerBase
     [HttpPost]
     [Authorize(Policy = PermisosDefinidos.BloqueosCrear)]
     [ProducesResponseType(typeof(CrearBloqueoResponseDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CrearBloqueoResponseDto>> CrearBloqueo(
         [FromBody] CrearBloqueoRequestDto request,
         CancellationToken cancellationToken)
@@ -49,7 +50,9 @@ public class BloqueosController : ControllerBase
     [HttpGet]
     [Authorize(Policy = PermisosDefinidos.BloqueosVer)]
     [ProducesResponseType(typeof(PagedResultDto<BloqueoListadoDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResultDto<BloqueoListadoDto>>> GetBloqueos(
         [FromQuery] BloqueosQueryParameters queryParams,
         CancellationToken cancellationToken)
@@ -65,8 +68,9 @@ public class BloqueosController : ControllerBase
     [HttpDelete("{id:int}")]
     [Authorize(Policy = PermisosDefinidos.BloqueosCrear)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> EliminarBloqueo(int id, CancellationToken cancellationToken)
     {
         await _bloqueosService.EliminarBloqueoAsync(id, cancellationToken);

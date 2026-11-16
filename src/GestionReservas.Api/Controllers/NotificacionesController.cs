@@ -30,6 +30,8 @@ public class NotificacionesController : ControllerBase
     /// <param name="cancellationToken">Token de cancelación.</param>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResultDto<NotificacionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<PagedResultDto<NotificacionDto>>> GetMisNotificaciones(
         [FromQuery] bool? leida = null,
         [FromQuery] int page = 1,
@@ -47,8 +49,9 @@ public class NotificacionesController : ControllerBase
     /// <param name="cancellationToken">Token de cancelación.</param>
     [HttpPatch("{id:int}/leer")]
     [ProducesResponseType(typeof(NotificacionDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<NotificacionDto>> MarcarComoLeida(
         int id,
         CancellationToken cancellationToken = default)
