@@ -42,5 +42,11 @@ public class BloqueosQueryParametersValidator : AbstractValidator<BloqueosQueryP
 
         RuleFor(x => x.PageSize)
             .InclusiveBetween(1, 100).WithMessage("El tamaño de página debe estar comprendido entre 1 y 100.");
+
+        RuleFor(x => x)
+            .Must(x => !x.Desde.HasValue || !x.Hasta.HasValue ||
+                       DateTimeZoneHelper.NormalizeToUtc(x.Desde.Value) <= DateTimeZoneHelper.NormalizeToUtc(x.Hasta.Value))
+            .WithName("Hasta")
+            .WithMessage("La fecha 'hasta' debe ser mayor o igual a la fecha 'desde'.");
     }
 }

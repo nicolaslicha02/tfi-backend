@@ -72,6 +72,13 @@ public class AuthService : IAuthService
             throw new UnauthorizedException("Credenciales inválidas.");
         }
 
+        var roles = usuario.UsuarioRoles
+            .Select(ur => ur.Rol.Nombre)
+            .Distinct()
+            .ToList();
+
+        var rolesSnapshot = string.Join(", ", roles);
+
         if (!_passwordHasher.VerifyPassword(request.Password, usuario.PasswordHash))
         {
             await RegistrarAuditoriaAsync(
@@ -82,7 +89,8 @@ public class AuthService : IAuthService
                 detalle: $"IP: {ipAddress ?? "desconocida"}",
                 cancellationToken: cancellationToken,
                 emailSnapshot: usuario.Email,
-                nombreSnapshot: usuario.NombreCompleto);
+                nombreSnapshot: usuario.NombreCompleto,
+                rol: rolesSnapshot);
 
             _logger.LogWarning("Intento de login fallido para el usuario ID {UsuarioId}: contraseña no coincide.", usuario.Id);
             throw new UnauthorizedException("Credenciales inválidas.");
@@ -99,18 +107,14 @@ public class AuthService : IAuthService
                 detalle: $"IP: {ipAddress ?? "desconocida"}",
                 cancellationToken: cancellationToken,
                 emailSnapshot: usuario.Email,
-                nombreSnapshot: usuario.NombreCompleto);
+                nombreSnapshot: usuario.NombreCompleto,
+                rol: rolesSnapshot);
 
             _logger.LogWarning("Intento de login rechazado para el usuario ID {UsuarioId}: cuenta inactiva.", usuario.Id);
             throw new UnauthorizedException("El usuario se encuentra inhabilitado para operar en el sistema.");
         }
 
-        // 5. Consolidación de roles y permisos
-        var roles = usuario.UsuarioRoles
-            .Select(ur => ur.Rol.Nombre)
-            .Distinct()
-            .ToList();
-
+        // 5. Consolidación de permisos
         var permisos = usuario.UsuarioRoles
             .SelectMany(ur => ur.Rol.RolPermisos)
             .Select(rp => rp.Permiso.Codigo)

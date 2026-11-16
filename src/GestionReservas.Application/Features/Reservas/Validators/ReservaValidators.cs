@@ -188,6 +188,12 @@ public class MisReservasQueryValidator : AbstractValidator<MisReservasQueryParam
         RuleFor(x => x.Estado)
             .IsInEnum().When(x => x.Estado.HasValue)
             .WithMessage("El estado de filtro especificado no es válido.");
+
+        RuleFor(x => x)
+            .Must(x => !x.Desde.HasValue || !x.Hasta.HasValue ||
+                       DateTimeZoneHelper.NormalizeToUtc(x.Desde.Value) <= DateTimeZoneHelper.NormalizeToUtc(x.Hasta.Value))
+            .WithName("Hasta")
+            .WithMessage("La fecha 'hasta' debe ser mayor o igual a la fecha 'desde'.");
     }
 }
 
@@ -207,5 +213,11 @@ public class ReservasQueryParametersValidator : AbstractValidator<ReservasQueryP
         RuleFor(x => x.Estado)
             .IsInEnum().When(x => x.Estado.HasValue)
             .WithMessage("El estado de filtro especificado no es válido.");
+
+        RuleFor(x => x)
+            .Must(x => !x.Desde.HasValue || !x.Hasta.HasValue ||
+                       DateTimeZoneHelper.NormalizeToUtc(x.Desde.Value) <= DateTimeZoneHelper.NormalizeToUtc(x.Hasta.Value))
+            .WithName("Hasta")
+            .WithMessage("La fecha 'hasta' debe ser mayor o igual a la fecha 'desde'.");
     }
 }

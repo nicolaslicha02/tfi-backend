@@ -897,7 +897,7 @@ public class ReservasService : IReservasService
                 FechaHora = a.FechaHora,
                 Accion = a.Accion,
                 UsuarioId = a.UsuarioId,
-                UsuarioNombre = a.Usuario != null ? a.Usuario.NombreCompleto : "Sistema",
+                UsuarioNombre = a.UsuarioNombre ?? (a.Usuario != null ? a.Usuario.NombreCompleto : "Sistema"),
                 Motivo = a.Motivo,
                 Detalle = a.Detalle
             })
