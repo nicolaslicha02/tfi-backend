@@ -39,7 +39,8 @@ public class CatalogosService : ICatalogosService
             {
                 Id = d.Id,
                 Nombre = d.Nombre,
-                Descripcion = d.Descripcion
+                Descripcion = d.Descripcion,
+                CantidadEspacios = d.Espacios.Count(e => e.FechaBaja == null)
             })
             .ToListAsync(cancellationToken);
     }
