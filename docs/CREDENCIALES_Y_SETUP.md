@@ -26,7 +26,7 @@ dotnet user-secrets set "Jwt:Key" "ClaveSuperSecretaExtremadamenteLargaParaJwtGe
 ```
 
 ### Paso 2: Verificar `appsettings.Development.json` (CORS)
-El archivo `src/GestionReservas.Api/appsettings.Development.json` define los orígenes permitidos para el frontend local:
+El archivo `src/GestionReservas.Api/appsettings.Development.json` define los orígenes permitidos para el frontend local mediante `Cors:AllowedOrigins` (incluyendo `http://localhost:5173`):
 
 ```json
 {
@@ -118,22 +118,22 @@ dotnet run --project src/GestionReservas.Api
     "id": 1,
     "codigo": "AULA-101",
     "nombre": "Aula Magna 101",
+    "tipoEspacioId": 1,
+    "tipoEspacioNombre": "Auditorio",
     "edificio": "Edificio Central",
     "piso": 1,
     "sector": "Ala Norte",
     "capacidadMaxima": 120,
-    "estado": "Disponible",
-    "tipoEspacioId": 1,
-    "tipoEspacioNombre": "Auditorio",
     "departamentoId": 3,
     "departamentoNombre": "Secretaría Académica",
+    "estado": "Disponible",
+    "esBaja": false,
     "equipamientos": [
       {
         "equipamientoId": 1,
         "nombre": "Proyector Láser Full HD",
         "cantidad": 1,
-        "valorOpcional": "4K Láser",
-        "observaciones": "Control remoto en estrado"
+        "especificacion": "4K Láser"
       }
     ]
   }
@@ -147,9 +147,6 @@ dotnet run --project src/GestionReservas.Api
   "espacioId": 4,
   "espacioCodigo": "LAB-SIS-01",
   "espacioNombre": "Laboratorio de Redes y Software",
-  "edificio": "Edificio de Tecnologías",
-  "piso": 1,
-  "sector": "Ala Este",
   "departamentoId": 1,
   "departamentoNombre": "Departamento de Sistemas e Informática",
   "solicitanteId": 4,
@@ -162,11 +159,11 @@ dotnet run --project src/GestionReservas.Api
   "motivo": "Clase práctica de laboratorio",
   "observaciones": "Se requiere entorno Linux",
   "estado": "Aprobada",
+  "motivoRechazo": null,
   "fechaSolicitud": "2026-11-15T18:00:00Z",
+  "fechaResolucion": "2026-11-15T18:05:00Z",
   "resueltoPorUsuarioId": 3,
   "resueltoPorNombre": "Ing. Carlos Gutiérrez (Responsable Sistemas)",
-  "fechaResolucion": "2026-11-15T18:05:00Z",
-  "motivoRechazo": null,
   "equipamientoRequerido": [
     {
       "equipamientoId": 1,
@@ -205,19 +202,17 @@ dotnet run --project src/GestionReservas.Api
   "espacioId": 4,
   "espacioCodigo": "LAB-SIS-01",
   "espacioNombre": "Laboratorio de Redes y Software",
-  "departamentoId": 1,
-  "departamentoNombre": "Departamento de Sistemas e Informática",
-  "desde": "2026-11-25T12:00:00Z",
-  "hasta": "2026-11-25T18:00:00Z",
+  "fechaHoraDesde": "2026-11-25T12:00:00Z",
+  "fechaHoraHasta": "2026-11-25T18:00:00Z",
   "motivo": "Reparación eléctrica de urgencia",
   "creadoPorUsuarioId": 1,
-  "creadoPorNombre": "Administrador General",
+  "creadoPorUsuarioNombre": "Administrador General",
   "fechaCreacion": "2026-11-15T19:00:00Z",
   "reservasCanceladas": [
     {
       "id": 15,
       "solicitanteId": 4,
-      "solicitanteNombre": "Prof. Martín Pérez (Docente Solicitante)",
+      "solicitante": "Prof. Martín Pérez (Docente Solicitante)",
       "solicitanteEmail": "docente.perez@facultad.edu.ar",
       "fechaHoraInicio": "2026-11-25T13:00:00Z",
       "fechaHoraFin": "2026-11-25T15:00:00Z",
@@ -279,11 +274,11 @@ dotnet run --project src/GestionReservas.Api
   "items": [
     {
       "id": 105,
-      "fechaHora": "2026-11-15T19:00:00Z",
       "usuarioId": 1,
-      "usuarioNombre": "Administrador General",
       "usuarioEmail": "admin@facultad.edu.ar",
+      "usuarioNombre": "Administrador General",
       "rol": "Administrador",
+      "fechaHora": "2026-11-15T19:00:00Z",
       "accion": "CrearBloqueo",
       "entidad": "Bloqueo",
       "entidadId": "8",
@@ -293,9 +288,6 @@ dotnet run --project src/GestionReservas.Api
   ],
   "total": 105,
   "page": 1,
-  "pageSize": 20,
-  "totalPages": 6,
-  "hasPreviousPage": false,
-  "hasNextPage": true
+  "pageSize": 20
 }
 ```
