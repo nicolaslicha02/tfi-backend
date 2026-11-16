@@ -28,7 +28,7 @@ back-office-tfi/
 │   └── GestionReservas.Api/                # Controllers REST, ExceptionHandlingMiddleware (RFC 7807), CORS, Swagger
 │
 └── tests/
-    └── GestionReservas.Tests/              # Suite de 86 pruebas de integración xUnit (GestionReservasDb_Test)
+    └── GestionReservas.Tests/              # Suite de 88 pruebas de integración xUnit (GestionReservasDb_Test)
         ├── Infrastructure/                 # CustomWebApplicationFactory (PostgreSQL GestionReservasDb_Test)
         ├── AuditoriaEndpointsTests.cs      # Bitácora de auditoría e inmutabilidad
         ├── AuthEndpointsTests.cs           # Login, JWT, /api/auth/me y departamento real
@@ -104,6 +104,10 @@ Al iniciar, `DatabaseSeeder` carga de forma idempotente los 4 roles, 15 permisos
    - **Concurrencia optimista (`xmin`)**: mapeada como `RowVersion` en `Reserva`; las modificaciones simultáneas lanzan `DbUpdateConcurrencyException` convertida en `409 Conflict`.
    - **Restricción física en PostgreSQL (`EXCLUDE USING gist`)**: impide a nivel de motor que coexistan dos filas `Aprobada` para el mismo `EspacioId` con rangos `tstzrange(FechaHoraInicio, FechaHoraFin, '[)')` superpuestos.
 4. **Evaluación de permisos y alcance departamental**: Los controllers exigen permisos atómicos mediante políticas dinámicas (`[Authorize(Policy = "...")]` sobre los 15 códigos de `PermisosDefinidos`), mientras que los servicios de aplicación aplican las reglas de propiedad (dueño de la reserva/notificación) y alcance departamental (`IEspacioAuthorizationService` verificando `usuario.DepartamentoId`).
+5. **Límites de diseño y alcance funcional**:
+   - **Gestión académica como datos maestros**: La estructura académica (`CicloLectivo`, `Materia`, `Cursada`, `Comision`, `AsignacionEspacio`) se encuentra completamente modelada, migrada y sembrada en base de datos para alimentar la detección de solapes en disponibilidad (`IDisponibilidadService`) y la proyección recurrente en el calendario (`/api/calendario`). No expone endpoints CRUD de administración directa por API para Secretaría Académica en esta versión.
+   - **Historial de matrícula**: La entidad `HistorialMatricula` y su tabla en PostgreSQL están definidas en el modelo de dominio para el seguimiento histórico de inscripciones por comisión, sin endpoints HTTP expuestos.
+   - **Responsabilidad sobre espacios**: La autorización de administración se resuelve a nivel departamental (`Usuario.DepartamentoId` alineado al departamento del espacio), no mediante asignación nominal de un usuario por espacio individual.
 
 ---
 
@@ -127,10 +131,10 @@ Al iniciar, `DatabaseSeeder` carga de forma idempotente los 4 roles, 15 permisos
 
 ## 6. Ejecución de las Pruebas Automatizadas (xUnit)
 
-La suite de pruebas (`tests/GestionReservas.Tests`) cuenta con **86 tests de integración** que se ejecutan contra una base de datos PostgreSQL aislada (`GestionReservasDb_Test`), verificando automáticamente que nunca se apunte a la base de desarrollo:
+La suite de pruebas (`tests/GestionReservas.Tests`) cuenta con **88 tests de integración** que se ejecutan contra una base de datos PostgreSQL aislada (`GestionReservasDb_Test`), verificando automáticamente que nunca se apunte a la base de desarrollo:
 
 ```powershell
-# Ejecutar toda la suite (86 tests)
+# Ejecutar toda la suite (88 tests)
 dotnet test
 
 # Ejecutar únicamente los 11 criterios de aceptación de la defensa (Sección 13 del enunciado)
