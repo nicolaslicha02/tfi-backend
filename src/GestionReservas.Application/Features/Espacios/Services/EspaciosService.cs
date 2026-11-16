@@ -287,69 +287,129 @@ public class EspaciosService : IEspaciosService
             throw new ValidationException(validationResult.Errors);
         }
 
-        var espacio = await _context.Espacios
-            .Include(e => e.Equipamientos)
-                .ThenInclude(ee => ee.Equipamiento)
-            .Include(e => e.Departamento)
-            .Include(e => e.TipoEspacio)
-            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
-
-        if (espacio == null || espacio.FechaBaja != null)
-        {
-            throw new NotFoundException($"El espacio con ID {id} no fue encontrado o se encuentra dado de baja.");
-        }
-
-        // 1. Autorización: debe poder administrar el depto actual y el depto destino si cambió
-        await _authService.ValidarPuedeAdministrarEspacioAsync(espacio, cancellationToken);
-        if (request.DepartamentoId != espacio.DepartamentoId)
-        {
-            await _authService.ValidarPuedeAdministrarDepartamentoAsync(request.DepartamentoId, cancellationToken);
-        }
-
-        // 2. Unicidad de código (excluyendo a sí mismo)
-        var codigoNormalized = request.Codigo.Trim().ToUpperInvariant();
-        var codigoExiste = await _context.Espacios
-            .AnyAsync(e => e.Codigo.ToUpper() == codigoNormalized && e.Id != id, cancellationToken);
-
-        if (codigoExiste)
-        {
-            throw new ConflictException($"El código de espacio '{request.Codigo}' ya se encuentra registrado por otro espacio.");
-        }
-
-        // 3. Validar TipoEspacio y Departamento
-        var tipoEspacio = await _context.TiposEspacio
-            .FirstOrDefaultAsync(t => t.Id == request.TipoEspacioId, cancellationToken);
-
-        if (tipoEspacio == null)
-        {
-            throw new NotFoundException($"El tipo de espacio con ID {request.TipoEspacioId} no existe.");
-        }
-
-        var departamento = await _context.Departamentos
-            .FirstOrDefaultAsync(d => d.Id == request.DepartamentoId, cancellationToken);
-
-        if (departamento == null)
-        {
-            throw new NotFoundException($"El departamento con ID {request.DepartamentoId} no existe.");
-        }
-
-        // 4. Validar y reemplazar equipamientos
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        _context.EspaciosEquipamiento.RemoveRange(espacio.Equipamientos);
-        espacio.Equipamientos.Clear();
-
-        if (request.Equipamientos.Count > 0)
+        try
         {
-            var requestedEquipIds = request.Equipamientos.Select(e => e.EquipamientoId).Distinct().ToList();
-            var existingEquip = await _context.Equipamientos
-                .Where(e => requestedEquipIds.Contains(e.Id))
+            await _context.AcquireAdvisoryXactLockAsync(id, cancellationToken);
+
+            var espacio = await _context.Espacios
+                .Include(e => e.Equipamientos)
+                    .ThenInclude(ee => ee.Equipamiento)
+                .Include(e => e.Departamento)
+                .Include(e => e.TipoEspacio)
+                .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+
+            if (espacio == null || espacio.FechaBaja != null)
+            {
+                throw new NotFoundException($"El espacio con ID {id} no fue encontrado o se encuentra dado de baja.");
+            }
+
+            // 1. Autorización: debe poder administrar el depto actual y el depto destino si cambió
+            await _authService.ValidarPuedeAdministrarEspacioAsync(espacio, cancellationToken);
+            if (request.DepartamentoId != espacio.DepartamentoId)
+            {
+                await _authService.ValidarPuedeAdministrarDepartamentoAsync(request.DepartamentoId, cancellationToken);
+            }
+
+            // 2. Unicidad de código (excluyendo a sí mismo)
+            var codigoNormalized = request.Codigo.Trim().ToUpperInvariant();
+            var codigoExiste = await _context.Espacios
+                .AnyAsync(e => e.Codigo.ToUpper() == codigoNormalized && e.Id != id, cancellationToken);
+
+            if (codigoExiste)
+            {
+                throw new ConflictException($"El código de espacio '{request.Codigo}' ya se encuentra registrado por otro espacio.");
+            }
+
+            // 3. Validar TipoEspacio y Departamento
+            var tipoEspacio = await _context.TiposEspacio
+                .FirstOrDefaultAsync(t => t.Id == request.TipoEspacioId, cancellationToken);
+
+            if (tipoEspacio == null)
+            {
+                throw new NotFoundException($"El tipo de espacio con ID {request.TipoEspacioId} no existe.");
+            }
+
+            var departamento = await _context.Departamentos
+                .FirstOrDefaultAsync(d => d.Id == request.DepartamentoId, cancellationToken);
+
+            if (departamento == null)
+            {
+                throw new NotFoundException($"El departamento con ID {request.DepartamentoId} no existe.");
+            }
+
+            // 4. Validar que existan en catálogo los equipamientos solicitados
+            var existingEquip = new List<Equipamiento>();
+            if (request.Equipamientos.Count > 0)
+            {
+                var requestedEquipIds = request.Equipamientos.Select(e => e.EquipamientoId).Distinct().ToList();
+                existingEquip = await _context.Equipamientos
+                    .Where(e => requestedEquipIds.Contains(e.Id))
+                    .ToListAsync(cancellationToken);
+
+                if (existingEquip.Count != requestedEquipIds.Count)
+                {
+                    var missingIds = requestedEquipIds.Except(existingEquip.Select(e => e.Id));
+                    throw new NotFoundException($"Los siguientes equipamientos no existen: {string.Join(", ", missingIds)}.");
+                }
+            }
+
+            // 5. Proteger reservas futuras activas (Aprobadas, Pendientes o Solicitadas)
+            var ahoraUtc = DateTime.UtcNow;
+            var reservasFuturasActivas = await _context.Reservas
+                .AsNoTracking()
+                .Include(r => r.EquipamientosRequeridos)
+                    .ThenInclude(re => re.Equipamiento)
+                .Where(r => r.EspacioId == id
+                         && r.FechaHoraFin > ahoraUtc
+                         && (r.Estado == EstadoReserva.Aprobada ||
+                             r.Estado == EstadoReserva.PendienteAprobacion ||
+                             r.Estado == EstadoReserva.Solicitada))
                 .ToListAsync(cancellationToken);
 
-            if (existingEquip.Count != requestedEquipIds.Count)
+            if (reservasFuturasActivas.Count > 0)
             {
-                var missingIds = requestedEquipIds.Except(existingEquip.Select(e => e.Id));
-                throw new NotFoundException($"Los siguientes equipamientos no existen: {string.Join(", ", missingIds)}.");
+                if (request.Estado == EstadoEspacio.FueraDeServicio)
+                {
+                    throw new ConflictException(
+                        "No se puede pasar el espacio a Fuera de Servicio porque posee reservas futuras pendientes o aprobadas. Es necesario resolver las reservas afectadas o registrar un bloqueo.");
+                }
+
+                var maxAsistentesComprometidos = reservasFuturasActivas.Max(r => r.AsistentesEstimados);
+                if (request.CapacidadMaxima < maxAsistentesComprometidos)
+                {
+                    throw new ConflictException(
+                        $"No se puede reducir la capacidad máxima del espacio a {request.CapacidadMaxima} porque es inferior a la capacidad comprometida ({maxAsistentesComprometidos} asistentes) en reservas futuras activas.");
+                }
+
+                var nuevosEquipamientosPorId = request.Equipamientos
+                    .GroupBy(e => e.EquipamientoId)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Cantidad));
+
+                foreach (var reserva in reservasFuturasActivas)
+                {
+                    foreach (var reqEq in reserva.EquipamientosRequeridos)
+                    {
+                        var nombreEq = reqEq.Equipamiento?.Nombre ?? $"ID {reqEq.EquipamientoId}";
+
+                        if (!nuevosEquipamientosPorId.TryGetValue(reqEq.EquipamientoId, out var nuevaCantidad))
+                        {
+                            throw new ConflictException(
+                                $"No se puede quitar el equipamiento '{nombreEq}' del espacio porque es requerido por la reserva futura #{reserva.Id}.");
+                        }
+
+                        if (nuevaCantidad < reqEq.CantidadRequerida)
+                        {
+                            throw new ConflictException(
+                                $"No se puede reducir la cantidad del equipamiento '{nombreEq}' a {nuevaCantidad} porque la reserva futura #{reserva.Id} requiere {reqEq.CantidadRequerida} unidad(es).");
+                        }
+                    }
+                }
             }
+
+            // 6. Reemplazar equipamientos y aplicar cambios en campos principales
+            _context.EspaciosEquipamiento.RemoveRange(espacio.Equipamientos);
+            espacio.Equipamientos.Clear();
 
             foreach (var item in request.Equipamientos)
             {
@@ -363,44 +423,48 @@ public class EspaciosService : IEspaciosService
                     ValorOpcional = string.IsNullOrWhiteSpace(item.Especificacion) ? null : item.Especificacion.Trim()
                 });
             }
+
+            espacio.Codigo = codigoNormalized;
+            espacio.Nombre = request.Nombre.Trim();
+            espacio.TipoEspacioId = request.TipoEspacioId;
+            espacio.TipoEspacio = tipoEspacio;
+            espacio.Edificio = request.Edificio.Trim();
+            espacio.Piso = request.Piso;
+            espacio.Sector = request.Sector.Trim();
+            espacio.CapacidadMaxima = request.CapacidadMaxima;
+            espacio.DepartamentoId = request.DepartamentoId;
+            espacio.Departamento = departamento;
+            espacio.Estado = request.Estado;
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // 7. Auditoría
+            var currentUserId = _currentUserService.UsuarioId;
+            var auditoria = new Auditoria
+            {
+                UsuarioId = currentUserId,
+                Rol = string.Join(", ", _currentUserService.Roles),
+                UsuarioNombre = _currentUserService.NombreCompleto,
+                UsuarioEmail = _currentUserService.Email,
+                FechaHora = ahoraUtc,
+                Accion = "ModificarEspacio",
+                Entidad = "Espacio",
+                EntidadId = espacio.Id.ToString(),
+                Motivo = $"Modificación integral del espacio {espacio.Codigo}",
+                Detalle = $"Nombre: {espacio.Nombre}; Capacidad: {espacio.CapacidadMaxima}; Depto: {departamento.Nombre}; Estado: {espacio.Estado}; Equipamientos: {espacio.Equipamientos.Count}"
+            };
+
+            _context.Auditorias.Add(auditoria);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return MapToDetalleDto(espacio);
         }
-
-        // 5. Aplicar cambios en campos principales
-        espacio.Codigo = codigoNormalized;
-        espacio.Nombre = request.Nombre.Trim();
-        espacio.TipoEspacioId = request.TipoEspacioId;
-        espacio.TipoEspacio = tipoEspacio;
-        espacio.Edificio = request.Edificio.Trim();
-        espacio.Piso = request.Piso;
-        espacio.Sector = request.Sector.Trim();
-        espacio.CapacidadMaxima = request.CapacidadMaxima;
-        espacio.DepartamentoId = request.DepartamentoId;
-        espacio.Departamento = departamento;
-        espacio.Estado = request.Estado;
-
-        await _context.SaveChangesAsync(cancellationToken);
-
-        // 6. Auditoría
-        var currentUserId = _currentUserService.UsuarioId;
-        var auditoria = new Auditoria
+        catch
         {
-            UsuarioId = currentUserId,
-            Rol = string.Join(", ", _currentUserService.Roles),
-            UsuarioNombre = _currentUserService.NombreCompleto,
-            UsuarioEmail = _currentUserService.Email,
-            FechaHora = DateTime.UtcNow,
-            Accion = "ModificarEspacio",
-            Entidad = "Espacio",
-            EntidadId = espacio.Id.ToString(),
-            Motivo = $"Modificación integral del espacio {espacio.Codigo}",
-            Detalle = $"Nombre: {espacio.Nombre}; Capacidad: {espacio.CapacidadMaxima}; Depto: {departamento.Nombre}; Estado: {espacio.Estado}; Equipamientos: {espacio.Equipamientos.Count}"
-        };
-
-        _context.Auditorias.Add(auditoria);
-        await _context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        return MapToDetalleDto(espacio);
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
     }
 
     public async Task EliminarEspacioAsync(int id, CancellationToken cancellationToken = default)
