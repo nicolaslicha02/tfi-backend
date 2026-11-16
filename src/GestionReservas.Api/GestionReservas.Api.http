@@ -1,6 +1,17 @@
 @GestionReservas.Api_HostAddress = http://localhost:5051
 
-GET {{GestionReservas.Api_HostAddress}}/weatherforecast/
+GET {{GestionReservas.Api_HostAddress}}/health
 Accept: application/json
+
+###
+
+POST {{GestionReservas.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "admin@facultad.edu.ar",
+  "password": "Admin123!"
+}
 
 ###
