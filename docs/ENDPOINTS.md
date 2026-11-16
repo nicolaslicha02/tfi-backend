@@ -51,7 +51,7 @@ Especificación completa de todos los endpoints implementados en el backend del 
 | `GET` | `/api/espacios/disponibles` | `espacios.ver` | Query: `fecha` (obligatorio), `horaInicio` (obligatorio), `horaFin` (obligatorio), `capacidadMinima`, `tipoEspacioId`, `edificio`, `sector`, `departamentoId`, `equipamientoIds` | `200`, `400`, `401`, `403` | Busca espacios disponibles en fecha y horario evaluando reservas aprobadas, bloqueos y cursadas (`AsignacionEspacio`). |
 | `GET` | `/api/espacios/{id}` | `espacios.ver` | Ruta: `id` (`int`) | `200`, `401`, `403`, `404` | Detalle completo de un espacio físico y su dotación de equipamiento (`404` si está dado de baja). |
 | `POST` | `/api/espacios` | `espacios.crear` | Body: `{ codigo, nombre, tipoEspacioId, edificio, piso, sector, capacidadMaxima, departamentoId, estado, equipamientos }` | `201`, `400`, `401`, `403`, `404`, `409` | Crea un nuevo espacio físico (Responsable solo en su departamento; Admin/Secretaría en cualquiera). |
-| `PUT` | `/api/espacios/{id}` | `espacios.editar` | Ruta: `id`; Body: `{ codigo, nombre, tipoEspacioId, edificio, piso, sector, capacidadMaxima, departamentoId, estado, equipamientos }` | `200`, `400`, `401`, `403`, `404`, `409` | Modifica integralmente un espacio físico protegiendo reservas futuras activas contra `FueraDeServicio`, reducción de capacidad o quita/reducción de equipamiento requerido. |
+| `PUT` | `/api/espacios/{id}` | `espacios.editar` | Ruta: `id`; Body: `{ codigo, nombre, tipoEspacioId, edificio, piso, sector, capacidadMaxima, departamentoId, estado, equipamientos }` | `200`, `400`, `401`, `403`, `404`, `409` | Modifica integralmente un espacio físico. Devuelve `409 Conflict` si hay reservas futuras activas incompatibles (pasar a `FueraDeServicio`, reducir capacidad por debajo de `asistentesEstimados` o quitar/reducir equipamiento requerido); el frontend debe mostrar el mensaje `detail`. |
 | `DELETE` | `/api/espacios/{id}` | `espacios.eliminar` | Ruta: `id` (`int`) | `204`, `401`, `403`, `404`, `409` | Baja lógica (`FechaBaja`). Rechaza con `409 Conflict` si posee reservas futuras pendientes o aprobadas. |
 
 ---
@@ -76,7 +76,7 @@ Especificación completa de todos los endpoints implementados en el backend del 
 
 | Método | Ruta | Permiso / Política | Parámetros / Body | Respuestas | Descripción |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/bloqueos` | `bloqueos.crear` | Body: `{ espacioId, desde, hasta, motivo, cancelarReservasAfectadas }` | `201`, `400`, `401`, `403`, `404`, `409` | Crea un bloqueo temporal. Si hay reservas afectadas y `cancelarReservasAfectadas = false` devuelve `409` con la lista; si es `true`, las cancela atómicamente, audita y notifica. |
+| `POST` | `/api/bloqueos` | `bloqueos.crear` | Body: `{ espacioId, desde, hasta, motivo, cancelarReservasAfectadas }` | `201`, `400`, `401`, `403`, `404`, `409` | Crea un bloqueo temporal (en el request se envían `desde` y `hasta`; las respuestas de `POST` y `GET` devuelven `fechaHoraDesde` y `fechaHoraHasta`). Si hay reservas afectadas y `cancelarReservasAfectadas = false`, devuelve `409` con `reservasAfectadas`; si es `true`, las cancela atómicamente, audita y notifica. |
 | `GET` | `/api/bloqueos` | `bloqueos.ver` | Query: `page`, `pageSize`, `espacioId`, `desde`, `hasta`, `vigentes` | `200`, `400`, `401`, `403` | Listado paginado de bloqueos respetando alcance departamental. |
 | `DELETE` | `/api/bloqueos/{id}` | `bloqueos.crear` | Ruta: `id` (`int`) | `204`, `401`, `403`, `404` | Levanta/elimina el bloqueo y registra en auditoría (no restaura reservas previamente canceladas). |
 
@@ -113,3 +113,35 @@ Especificación completa de todos los endpoints implementados en el backend del 
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/health` | Público | — | `200`, `503` | Estado operativo del servicio y verificación de conectividad con PostgreSQL. |
 | `GET` | `/swagger` | Público | — | `200` | Interfaz interactiva OpenAPI / Swagger UI con soporte de autorización Bearer JWT. |
+
+---
+
+## 11. Errores Comunes y Formato `ProblemDetails` (RFC 7807)
+
+Todas las respuestas de error devuelven `Content-Type: application/problem+json` generado por `ExceptionHandlingMiddleware` con la estructura estándar:
+
+```json
+{
+  "type": "https://httpstatuses.com/400",
+  "title": "Error de validación",
+  "status": 400,
+  "detail": "Se produjeron uno o más errores de validación.",
+  "instance": "/api/reservas",
+  "errors": {
+    "AsistentesEstimados": [
+      "La cantidad de asistentes estimados (50) supera la capacidad máxima del espacio 'LAB-SIS-01' (32 personas)."
+    ]
+  }
+}
+```
+
+### Códigos HTTP por Regla de Negocio
+
+| Código HTTP | `title` | Cuándo ocurre (reglas principales) | Campos extra |
+| :---: | :--- | :--- | :--- |
+| **`400` Bad Request** | `"Error de validación"` | Capacidad máxima excedida (`asistentesEstimados > capacidadMaxima`), rango de fechas inválido (`hasta < desde` o calendario > 31 días), falta de motivo al rechazar o cancelar una reserva `Aprobada`, falta de equipamiento en el espacio, contraseña débil o formato inválido. | `errors` (`IDictionary<string, string[]>`) |
+| **`401` Unauthorized** | `"No autorizado"` | Token JWT ausente, inválido o expirado; credenciales incorrectas; usuario inactivo o dado de baja. | — |
+| **`403` Forbidden** | `"Acceso denegado"` | Usuario sin el permiso requerido por la política del endpoint (`[Authorize(Policy = "...")]`), `ResponsableEspacio` operando sobre un espacio/reserva/bloqueo de otro departamento, o `Solicitante` intentando ver/cancelar/modificar una reserva o notificación ajena (IDOR). | — |
+| **`404` Not Found** | `"Recurso no encontrado"` | Espacio inexistente o dado de baja (`FechaBaja != null` en `GET /api/espacios/{id}`), reserva/bloqueo/notificación/usuario/catálogo inexistente. | — |
+| **`409` Conflict** | `"Conflicto con el estado actual del recurso"` | Superposición horaria con reserva aprobada, bloqueo vigente o cursada oficial (`AsignacionEspacio`); concurrencia simultánea (`xmin` o `EXCLUDE USING gist`); aprobar reserva en el pasado; `POST /api/bloqueos` con reservas afectadas y `cancelarReservasAfectadas = false`; `PUT /api/espacios/{id}` incompatible con reservas futuras activas; `DELETE /api/espacios/{id}` con reservas futuras; código o email duplicado; auto-desactivación o último `Administrador` activo. | `reservasAfectadas` (presente en `POST /api/bloqueos` cuando `cancelarReservasAfectadas = false`) |
+| **`500` Internal Server Error** | `"Error interno del servidor"` | Excepción no controlada del servidor. | En `Development` incluye detalle de la excepción en `detail`. |
