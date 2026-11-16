@@ -251,9 +251,6 @@ public class BloqueosService : IBloqueosService
 
         var query = _context.Bloqueos
             .AsNoTracking()
-            .Include(b => b.Espacio)
-                .ThenInclude(e => e.Departamento)
-            .Include(b => b.CreadoPorUsuario)
             .AsQueryable();
 
         // Alcance departamental: Admin y Secretaría ven todos; Responsable solo de su depto

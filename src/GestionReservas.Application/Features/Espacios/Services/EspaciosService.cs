@@ -55,10 +55,6 @@ public class EspaciosService : IEspaciosService
         }
 
         var query = _context.Espacios
-            .Include(e => e.TipoEspacio)
-            .Include(e => e.Departamento)
-            .Include(e => e.Equipamientos)
-                .ThenInclude(ee => ee.Equipamiento)
             .AsNoTracking();
 
         var puedeVerBajas = _currentUserService.HasPermission(PermisosDefinidos.EspaciosCrear) ||
@@ -546,10 +542,6 @@ public class EspaciosService : IEspaciosService
 
         // 3. Consulta de espacios disponibles con filtros
         var query = _context.Espacios
-            .Include(e => e.TipoEspacio)
-            .Include(e => e.Departamento)
-            .Include(e => e.Equipamientos)
-                .ThenInclude(ee => ee.Equipamiento)
             .Where(e => e.FechaBaja == null && e.Estado == EstadoEspacio.Disponible)
             .Where(e => !noDisponiblesQuery.Contains(e.Id))
             .AsNoTracking();

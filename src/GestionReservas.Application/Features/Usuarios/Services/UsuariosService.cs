@@ -158,9 +158,6 @@ public class UsuariosService : IUsuariosService
         }
 
         var query = _context.Usuarios
-            .Include(u => u.Departamento)
-            .Include(u => u.UsuarioRoles)
-                .ThenInclude(ur => ur.Rol)
             .AsNoTracking();
 
         // Filtro por texto (Nombre, Apellido o Email)

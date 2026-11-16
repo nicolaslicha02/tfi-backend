@@ -297,10 +297,6 @@ public class ReservasService : IReservasService
 
         var query = _context.Reservas
             .AsNoTracking()
-            .Include(r => r.Espacio)
-                .ThenInclude(e => e.Departamento)
-            .Include(r => r.Solicitante)
-            .Include(r => r.ResueltoPorUsuario)
             .AsQueryable();
 
         if (!esAdminOSecretaria)
