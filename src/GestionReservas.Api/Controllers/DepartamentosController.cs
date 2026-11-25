@@ -35,4 +35,41 @@ public class DepartamentosController : ControllerBase
         var departamentos = await _catalogosService.GetDepartamentosAsync(cancellationToken);
         return Ok(departamentos);
     }
+
+    /// <summary>Registra un departamento institucional.</summary>
+    [HttpPost]
+    [Authorize(Policy = PermisosDefinidos.UsuariosGestionar)]
+    [ProducesResponseType(typeof(DepartamentoDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<DepartamentoDto>> Create([FromBody] GuardarDepartamentoRequestDto request, CancellationToken ct)
+    {
+        var department = await _catalogosService.CrearDepartamentoAsync(request, ct);
+        return Created("/api/departamentos", department);
+    }
+
+    /// <summary>Actualiza un departamento institucional.</summary>
+    [HttpPut("{id:int}")]
+    [Authorize(Policy = PermisosDefinidos.UsuariosGestionar)]
+    [ProducesResponseType(typeof(DepartamentoDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<DepartamentoDto>> Update(int id, [FromBody] GuardarDepartamentoRequestDto request, CancellationToken ct)
+        => Ok(await _catalogosService.ActualizarDepartamentoAsync(id, request, ct));
+
+    /// <summary>Elimina un departamento que no esté asociado a datos institucionales.</summary>
+    [HttpDelete("{id:int}")]
+    [Authorize(Policy = PermisosDefinidos.UsuariosGestionar)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        await _catalogosService.EliminarDepartamentoAsync(id, ct);
+        return NoContent();
+    }
 }

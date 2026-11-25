@@ -64,3 +64,13 @@ public class MisReservasQueryParameters
     public DateTime? Desde { get; set; }
     public DateTime? Hasta { get; set; }
 }
+
+/// <summary>Superposición detectada entre una reserva aprobada y otra reserva, un bloqueo o una cursada.</summary>
+public sealed record ConflictoReservaDto(
+    int ReservaId,
+    int EspacioId,
+    string EspacioCodigo,
+    DateTime Inicio,
+    DateTime Fin,
+    string Tipo,
+    string Detalle);

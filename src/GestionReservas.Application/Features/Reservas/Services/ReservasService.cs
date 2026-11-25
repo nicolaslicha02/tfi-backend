@@ -352,6 +352,74 @@ public class ReservasService : IReservasService
         return new PagedResultDto<ReservaListadoDto>(items, total, queryParams.Page, queryParams.PageSize);
     }
 
+    public async Task<IReadOnlyList<ConflictoReservaDto>> GetConflictosAsync(DateTime desde, DateTime hasta, CancellationToken cancellationToken = default)
+    {
+        if (!_currentUserService.IsInRole("Administrador") && !_currentUserService.IsInRole("SecretariaAcademica") && !_currentUserService.IsInRole("ResponsableEspacio"))
+            throw new ForbiddenException("No posee permisos para consultar conflictos de reservas.");
+        if (hasta <= desde || hasta - desde > TimeSpan.FromDays(93))
+            throw new ValidationException("Rango", "Indique un rango válido de hasta 93 días.");
+
+        var desdeUtc = DateTimeZoneHelper.NormalizeToUtc(desde);
+        var hastaUtc = DateTimeZoneHelper.NormalizeToUtc(hasta);
+        var query = _context.Reservas.AsNoTracking().Include(r => r.Espacio)
+            .Where(r => r.Estado == EstadoReserva.Aprobada && r.FechaHoraInicio < hastaUtc && r.FechaHoraFin > desdeUtc);
+
+        if (_currentUserService.IsInRole("ResponsableEspacio") && !_currentUserService.IsInRole("SecretariaAcademica") && !_currentUserService.IsInRole("Administrador"))
+        {
+            var userId = _currentUserService.UsuarioId ?? throw new UnauthorizedException("Usuario no autenticado.");
+            var departmentId = await _context.Usuarios.AsNoTracking().Where(u => u.Id == userId)
+                .Select(u => u.DepartamentoId).FirstOrDefaultAsync(cancellationToken);
+            if (!departmentId.HasValue) return Array.Empty<ConflictoReservaDto>();
+            query = query.Where(r => r.Espacio.DepartamentoId == departmentId.Value);
+        }
+
+        var candidates = await query.OrderBy(r => r.FechaHoraInicio).ToListAsync(cancellationToken);
+        if (candidates.Count == 0) return Array.Empty<ConflictoReservaDto>();
+        var spaceIds = candidates.Select(r => r.EspacioId).Distinct().ToArray();
+        var rangeStart = candidates.Min(r => r.FechaHoraInicio);
+        var rangeEnd = candidates.Max(r => r.FechaHoraFin);
+        var relatedReservations = await _context.Reservas.AsNoTracking().Where(r => spaceIds.Contains(r.EspacioId) &&
+            r.Estado == EstadoReserva.Aprobada && r.FechaHoraInicio < rangeEnd && r.FechaHoraFin > rangeStart).ToListAsync(cancellationToken);
+        var relatedBlocks = await _context.Bloqueos.AsNoTracking().Where(b => spaceIds.Contains(b.EspacioId) &&
+            b.FechaHoraDesde < rangeEnd && b.FechaHoraHasta > rangeStart).ToListAsync(cancellationToken);
+        var relatedAssignments = await _context.AsignacionesEspacio.AsNoTracking()
+            .Include(a => a.Comision).ThenInclude(c => c.Cursada).ThenInclude(c => c.CicloLectivo)
+            .Where(a => spaceIds.Contains(a.EspacioId) && a.Comision.Cursada.CicloLectivo.Activo &&
+                a.Comision.Cursada.CicloLectivo.FechaInicio <= rangeEnd && a.Comision.Cursada.CicloLectivo.FechaFin >= rangeStart)
+            .ToListAsync(cancellationToken);
+
+        var conflicts = new List<ConflictoReservaDto>();
+        foreach (var reservation in candidates)
+        {
+            var other = relatedReservations.FirstOrDefault(item => item.Id != reservation.Id && item.EspacioId == reservation.EspacioId &&
+                item.FechaHoraInicio < reservation.FechaHoraFin && item.FechaHoraFin > reservation.FechaHoraInicio);
+            if (other is not null)
+                conflicts.Add(new(reservation.Id, reservation.EspacioId, reservation.Espacio.Codigo, reservation.FechaHoraInicio, reservation.FechaHoraFin, "Reserva", $"Se superpone con la reserva #{other.Id}."));
+
+            var blocked = relatedBlocks.Any(block => block.EspacioId == reservation.EspacioId &&
+                block.FechaHoraDesde < reservation.FechaHoraFin && block.FechaHoraHasta > reservation.FechaHoraInicio);
+            if (blocked)
+                conflicts.Add(new(reservation.Id, reservation.EspacioId, reservation.Espacio.Codigo, reservation.FechaHoraInicio, reservation.FechaHoraFin, "Bloqueo", "Se superpone con un bloqueo institucional."));
+
+            var localStart = DateTimeZoneHelper.ToFacultadLocal(reservation.FechaHoraInicio);
+            var localEnd = DateTimeZoneHelper.ToFacultadLocal(reservation.FechaHoraFin);
+            string? commissionCode = null;
+            for (var date = localStart.Date; date <= localEnd.Date && commissionCode is null; date = date.AddDays(1))
+            {
+                var timeStart = date == localStart.Date ? localStart.TimeOfDay : TimeSpan.Zero;
+                var timeEnd = date == localEnd.Date ? localEnd.TimeOfDay : TimeSpan.FromDays(1);
+                commissionCode = relatedAssignments.Where(a => a.EspacioId == reservation.EspacioId &&
+                        date >= a.Comision.Cursada.CicloLectivo.FechaInicio.Date && date <= a.Comision.Cursada.CicloLectivo.FechaFin.Date &&
+                        a.DiaSemana == date.DayOfWeek && a.HoraInicio < timeEnd && a.HoraFin > timeStart)
+                    .Select(a => a.Comision.Codigo).FirstOrDefault();
+            }
+            if (commissionCode is not null)
+                conflicts.Add(new(reservation.Id, reservation.EspacioId, reservation.Espacio.Codigo, reservation.FechaHoraInicio, reservation.FechaHoraFin, "Cursada", $"Se superpone con una asignación académica de la comisión {commissionCode}."));
+        }
+
+        return conflicts;
+    }
+
     public async Task<ReservaDetalleDto> GetReservaByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         var usuarioId = _currentUserService.UsuarioId

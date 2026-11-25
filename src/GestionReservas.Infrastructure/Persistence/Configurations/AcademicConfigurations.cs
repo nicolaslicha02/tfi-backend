@@ -100,6 +100,11 @@ public class ComisionConfiguration : IEntityTypeConfiguration<Comision>
             .IsRequired()
             .HasMaxLength(50);
 
+        builder.Property(c => c.Modalidad)
+            .IsRequired()
+            .HasMaxLength(30)
+            .HasDefaultValue("Presencial");
+
         builder.Property(c => c.CantidadInscriptos)
             .IsRequired();
 

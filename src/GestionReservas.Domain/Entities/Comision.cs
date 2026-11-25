@@ -20,6 +20,9 @@ public class Comision
     /// </summary>
     public string Turno { get; set; } = string.Empty;
 
+    /// <summary>Modalidad de dictado informada por Secretaría Académica.</summary>
+    public string Modalidad { get; set; } = "Presencial";
+
     /// <summary>
     /// Cantidad inicial de alumnos inscriptos.
     /// </summary>

@@ -57,6 +57,21 @@ public class ReservasController : ControllerBase
     public async Task<ActionResult<PagedResultDto<ReservaListadoDto>>> GetReservas([FromQuery] ReservasQueryParameters query, CancellationToken ct)
         => Ok(await _reservasService.GetReservasAdministrativasAsync(query, ct));
 
+    /// <summary>Lista superposiciones entre reservas aprobadas, bloqueos y cursadas académicas.</summary>
+    [HttpGet("api/reservas/conflictos")]
+    [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]
+    [ProducesResponseType(typeof(IReadOnlyList<ConflictoReservaDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<ConflictoReservaDto>>> Conflictos(
+        [FromQuery] DateTime? desde, [FromQuery] DateTime? hasta, CancellationToken ct)
+    {
+        var end = hasta ?? DateTime.UtcNow;
+        var start = desde ?? end.AddDays(-30);
+        return Ok(await _reservasService.GetConflictosAsync(start, end, ct));
+    }
+
     /// <summary>Solicitudes pendientes de aprobación (paginadas).</summary>
     [HttpGet("api/reservas/pendientes")]
     [Authorize(Policy = PermisosDefinidos.ReservasVerPendientes)]

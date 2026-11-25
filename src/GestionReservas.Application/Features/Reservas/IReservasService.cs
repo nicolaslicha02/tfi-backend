@@ -49,5 +49,7 @@ public interface IReservasService
     /// respetando el alcance departamental (Admin/Secretaría ven todas; Responsable solo su departamento).
     /// </summary>
     Task<PagedResultDto<ReservaListadoDto>> GetReservasAdministrativasAsync(ReservasQueryParameters queryParams, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ConflictoReservaDto>> GetConflictosAsync(DateTime desde, DateTime hasta, CancellationToken cancellationToken = default);
 }
 

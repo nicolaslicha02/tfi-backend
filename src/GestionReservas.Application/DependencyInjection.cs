@@ -21,6 +21,8 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAuditoriaService, AuditoriaService>();
         services.AddScoped<ICatalogosService, CatalogosService>();
+        services.AddScoped<GestionReservas.Application.Features.Dashboard.IDashboardService, GestionReservas.Application.Features.Dashboard.DashboardService>();
+        services.AddScoped<GestionReservas.Application.Features.Comisiones.IComisionesService, GestionReservas.Application.Features.Comisiones.Services.ComisionesService>();
         services.AddScoped<IUsuariosService, UsuariosService>();
         services.AddScoped<IEspacioAuthorizationService, EspacioAuthorizationService>();
         services.AddScoped<IDisponibilidadService, DisponibilidadService>();

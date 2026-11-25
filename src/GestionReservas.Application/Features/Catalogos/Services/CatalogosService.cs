@@ -50,6 +50,86 @@ public class CatalogosService : ICatalogosService
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<DepartamentoDto> CrearDepartamentoAsync(GuardarDepartamentoRequestDto request, CancellationToken cancellationToken = default)
+    {
+        ValidarGestionDepartamentos(request);
+        var nombre = request.Nombre.Trim();
+        if (await _context.Departamentos.AnyAsync(d => d.Nombre.ToLower() == nombre.ToLower(), cancellationToken))
+            throw new ConflictException($"Ya existe el departamento '{nombre}'.");
+
+        var department = new Departamento { Nombre = nombre, Descripcion = NormalizarDescripcion(request.Descripcion) };
+        _context.Departamentos.Add(department);
+        await _context.SaveChangesAsync(cancellationToken);
+        await RegistrarAuditoriaDepartamentoAsync("CrearDepartamento", department, cancellationToken);
+        return MapearDepartamento(department);
+    }
+
+    public async Task<DepartamentoDto> ActualizarDepartamentoAsync(int id, GuardarDepartamentoRequestDto request, CancellationToken cancellationToken = default)
+    {
+        ValidarGestionDepartamentos(request);
+        var department = await _context.Departamentos.FirstOrDefaultAsync(d => d.Id == id, cancellationToken)
+            ?? throw new NotFoundException("Departamento", id);
+        var nombre = request.Nombre.Trim();
+        if (await _context.Departamentos.AnyAsync(d => d.Id != id && d.Nombre.ToLower() == nombre.ToLower(), cancellationToken))
+            throw new ConflictException($"Ya existe el departamento '{nombre}'.");
+
+        department.Nombre = nombre;
+        department.Descripcion = NormalizarDescripcion(request.Descripcion);
+        await _context.SaveChangesAsync(cancellationToken);
+        await RegistrarAuditoriaDepartamentoAsync("ActualizarDepartamento", department, cancellationToken);
+        return MapearDepartamento(department);
+    }
+
+    public async Task EliminarDepartamentoAsync(int id, CancellationToken cancellationToken = default)
+    {
+        ValidarGestionDepartamentos();
+        var department = await _context.Departamentos.FirstOrDefaultAsync(d => d.Id == id, cancellationToken)
+            ?? throw new NotFoundException("Departamento", id);
+        var referenciado = await _context.Espacios.AnyAsync(e => e.DepartamentoId == id, cancellationToken) ||
+            await _context.Usuarios.AnyAsync(u => u.DepartamentoId == id, cancellationToken) ||
+            await _context.Materias.AnyAsync(m => m.DepartamentoId == id, cancellationToken);
+        if (referenciado)
+            throw new ConflictException("No se puede eliminar un departamento con espacios, usuarios o materias asociados.");
+
+        _context.Departamentos.Remove(department);
+        await _context.SaveChangesAsync(cancellationToken);
+        await RegistrarAuditoriaDepartamentoAsync("EliminarDepartamento", department, cancellationToken);
+    }
+
+    private void ValidarGestionDepartamentos(GuardarDepartamentoRequestDto? request = null)
+    {
+        if (!_currentUserService.IsInRole("Administrador") && !_currentUserService.IsInRole("SecretariaAcademica"))
+            throw new GestionReservas.Application.Common.Exceptions.ForbiddenException("Solo Secretaría Académica o Administración puede gestionar departamentos.");
+        if (request is not null && (string.IsNullOrWhiteSpace(request.Nombre) || request.Nombre.Trim().Length > 150 || request.Descripcion?.Length > 300))
+            throw new ValidationException("Nombre", "El nombre es obligatorio (máximo 150 caracteres) y la descripción no puede superar 300 caracteres.");
+    }
+
+    private static DepartamentoDto MapearDepartamento(Departamento department) => new()
+    {
+        Id = department.Id,
+        Nombre = department.Nombre,
+        Descripcion = department.Descripcion,
+        CantidadEspacios = department.Espacios.Count(e => e.FechaBaja is null)
+    };
+
+    private async Task RegistrarAuditoriaDepartamentoAsync(string action, Departamento department, CancellationToken cancellationToken)
+    {
+        _context.Auditorias.Add(new Auditoria
+        {
+            UsuarioId = _currentUserService.UsuarioId,
+            UsuarioNombre = _currentUserService.NombreCompleto,
+            UsuarioEmail = _currentUserService.Email,
+            Rol = string.Join(", ", _currentUserService.Roles),
+            FechaHora = DateTime.UtcNow,
+            Accion = action,
+            Entidad = "Departamento",
+            EntidadId = department.Id.ToString(),
+            Motivo = "Gestión del catálogo de departamentos",
+            Detalle = $"{action}: {department.Nombre}."
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<EquipamientoDto>> GetEquipamientosAsync(CancellationToken cancellationToken = default)
     {
         return await _context.Equipamientos

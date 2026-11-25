@@ -11,6 +11,9 @@ public interface ICatalogosService
     /// Obtiene la lista de departamentos y secretarías institucionales.
     /// </summary>
     Task<IReadOnlyList<DepartamentoDto>> GetDepartamentosAsync(CancellationToken cancellationToken = default);
+    Task<DepartamentoDto> CrearDepartamentoAsync(GuardarDepartamentoRequestDto request, CancellationToken cancellationToken = default);
+    Task<DepartamentoDto> ActualizarDepartamentoAsync(int id, GuardarDepartamentoRequestDto request, CancellationToken cancellationToken = default);
+    Task EliminarDepartamentoAsync(int id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Obtiene el catálogo de equipamientos disponibles para espacios físicos.

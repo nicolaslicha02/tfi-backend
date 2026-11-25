@@ -210,6 +210,12 @@ namespace GestionReservas.Infrastructure.Persistence.Migrations
                     b.Property<int>("CursadaId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Modalidad")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasDefaultValue("Presencial")
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("Turno")
                         .IsRequired()
                         .HasMaxLength(50)
