@@ -26,6 +26,9 @@ public interface ICatalogosService
     /// Obtiene los roles de usuario definidos en el sistema.
     /// </summary>
     Task<IReadOnlyList<RolDto>> GetRolesAsync(CancellationToken cancellationToken = default);
+    Task<RolDto> CrearRolAsync(GuardarRolRequestDto request, CancellationToken cancellationToken = default);
+    Task<RolDto> ActualizarRolAsync(int id, GuardarRolRequestDto request, CancellationToken cancellationToken = default);
+    Task EliminarRolAsync(int id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Registra un nuevo equipamiento en el catálogo tecnológico.
