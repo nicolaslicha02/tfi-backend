@@ -183,10 +183,18 @@ public class CriteriosAceptacionDefensaTests : IClassFixture<CustomWebApplicatio
             aula101Id = (await db.Espacios.FirstAsync(e => e.Codigo == "AULA-101")).Id;
         }
 
-        // Martes 24 de noviembre de 2026 de 18:30 a 20:00 (superpuesto con cursada oficial A1011 Martes 18:00-21:00)
-        var fechaMartes = new DateOnly(2026, 11, 24);
+        // Próximo martes de 18:30 a 20:00 (superpuesto con cursada oficial A1011 Martes 18:00-21:00)
+        var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+        var diasHastaMartes = ((int)DayOfWeek.Tuesday - (int)hoy.DayOfWeek + 7) % 7;
+        var fechaMartes = hoy.AddDays(diasHastaMartes == 0 ? 7 : diasHastaMartes);
         var docente = await DocenteAsync();
         var admin = await AdminAsync();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await AcademicTestData.AgregarAsignacionAsync(
+                db, aula101Id, fechaMartes, DayOfWeek.Tuesday, new TimeOnly(18, 0), new TimeOnly(21, 0));
+        }
 
         var resResp = await SendAsync(docente, HttpMethod.Post, "/api/reservas", new CrearReservaRequestDto
         {
@@ -260,14 +268,22 @@ public class CriteriosAceptacionDefensaTests : IClassFixture<CustomWebApplicatio
         });
         Assert.Equal(HttpStatusCode.Conflict, blqFalse.StatusCode);
 
-        // 2. Con CancelarReservasAfectadas = true -> 201 Created, cancela la reserva, notifica y audita
+        using var reservasJson = System.Text.Json.JsonDocument.Parse(await blqFalse.Content.ReadAsStringAsync());
+        var reservasAfectadas = System.Text.Json.JsonSerializer.Deserialize<List<ReservaAfectadaDto>>(
+            reservasJson.RootElement.GetProperty("reservasAfectadas").GetRawText(),
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+
+        // 2. Confirmar explícitamente IDs y versiones antes de cancelar.
         var blqTrue = await SendAsync(admin, HttpMethod.Post, "/api/bloqueos", new CrearBloqueoRequestDto
         {
             EspacioId = espacioId,
             Desde = DateTimeZoneHelper.ToUtc(fecha, new TimeOnly(9, 0)),
             Hasta = DateTimeZoneHelper.ToUtc(fecha, new TimeOnly(13, 0)),
             Motivo = "Obra edilicia urgente",
-            CancelarReservasAfectadas = true
+            CancelarReservasAfectadas = true,
+            ReservasConfirmadas = reservasAfectadas.Select(r => r.Id).ToList(),
+            VersionesReservasConfirmadas = reservasAfectadas
+                .Select(r => new ReservaConfirmadaVersionDto { Id = r.Id, Version = r.Version }).ToList()
         });
         Assert.Equal(HttpStatusCode.Created, blqTrue.StatusCode);
         var resultado = await blqTrue.Content.ReadFromJsonAsync<CrearBloqueoResponseDto>();

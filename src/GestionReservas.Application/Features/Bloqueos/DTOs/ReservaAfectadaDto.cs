@@ -14,4 +14,21 @@ public class ReservaAfectadaDto
     public DateTime FechaHoraInicio { get; set; }
     public DateTime FechaHoraFin { get; set; }
     public EstadoReserva Estado { get; set; }
+
+    /// <summary>
+    /// Versión opaca de PostgreSQL para confirmar que la reserva no cambió desde que se mostró.
+    /// </summary>
+    public uint Version { get; set; }
+}
+
+/// <summary>
+/// Versión que el cliente confirma para una reserva mostrada previamente.
+/// </summary>
+public class ReservaConfirmadaVersionDto
+{
+    /// <summary>Identificador de la reserva mostrada al usuario.</summary>
+    public int Id { get; set; }
+
+    /// <summary>Valor de versión devuelto en la lista de reservas afectadas.</summary>
+    public uint Version { get; set; }
 }

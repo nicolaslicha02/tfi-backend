@@ -196,6 +196,22 @@ dotnet run --project src/GestionReservas.Api
 ```
 
 ### 3.5 `POST /api/bloqueos` con `cancelarReservasAfectadas = true` (`201 Created`)
+El cliente primero recibe un `409` con `reservasAfectadas`. Debe mostrar esa lista y reenviar únicamente las reservas que el usuario confirmó, junto con cada versión. Si hay una reserva nueva, una reserva sale del rango o una reserva cambia desde que se mostró, el servidor devuelve `409` con la lista actualizada y no modifica datos.
+
+```json
+{
+  "espacioId": 4,
+  "desde": "2026-11-25T12:00:00Z",
+  "hasta": "2026-11-25T18:00:00Z",
+  "motivo": "Reparación eléctrica de urgencia",
+  "cancelarReservasAfectadas": true,
+  "reservasConfirmadas": [15],
+  "versionesReservasConfirmadas": [{ "id": 15, "version": 8241 }]
+}
+```
+
+`reservasConfirmadas` y `versionesReservasConfirmadas` se copian de `reservasAfectadas` en el `409` previo. IDs repetidos se interpretan como conjunto; todos deben ser positivos. `true` sin lista solo crea el bloqueo cuando no hay reservas afectadas.
+
 ```json
 {
   "id": 8,
@@ -216,9 +232,23 @@ dotnet run --project src/GestionReservas.Api
       "solicitanteEmail": "docente.perez@facultad.edu.ar",
       "fechaHoraInicio": "2026-11-25T13:00:00Z",
       "fechaHoraFin": "2026-11-25T15:00:00Z",
-      "estado": "Cancelada"
+      "estado": "Cancelada",
+      "version": 8242
     }
   ]
+}
+```
+
+Un conflicto por lista obsoleta devuelve `reservasAfectadas` actualizado, incluso cuando está vacío:
+
+```json
+{
+  "type": "https://httpstatuses.com/409",
+  "title": "Conflicto con el estado actual del recurso",
+  "status": 409,
+  "detail": "La lista de reservas cambió o alguna reserva fue actualizada. Revisá la lista y confirmá nuevamente.",
+  "instance": "/api/bloqueos",
+  "reservasAfectadas": []
 }
 ```
 

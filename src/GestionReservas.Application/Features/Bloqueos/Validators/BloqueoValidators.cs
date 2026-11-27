@@ -27,6 +27,16 @@ public class CrearBloqueoRequestValidator : AbstractValidator<CrearBloqueoReques
             .NotEmpty().WithMessage("La fecha y hora de finalización del bloqueo es obligatoria.")
             .Must((dto, hasta) => DateTimeZoneHelper.NormalizeToUtc(hasta) > DateTimeZoneHelper.NormalizeToUtc(dto.Desde))
             .WithMessage("La fecha y hora de finalización debe ser posterior a la fecha y hora de inicio.");
+
+        RuleForEach(x => x.ReservasConfirmadas)
+            .GreaterThan(0).WithMessage("Los identificadores de reserva deben ser positivos.");
+
+        RuleForEach(x => x.VersionesReservasConfirmadas)
+            .ChildRules(version =>
+            {
+                version.RuleFor(x => x.Id)
+                    .GreaterThan(0).WithMessage("Los identificadores de reserva deben ser positivos.");
+            });
     }
 }
 

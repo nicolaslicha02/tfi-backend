@@ -15,7 +15,7 @@ Especificación completa de todos los endpoints implementados en el backend del 
 | Método | Ruta | Permiso / Política | Parámetros / Body | Respuestas | Descripción |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/api/auth/login` | Público (`[AllowAnonymous]`) | Body: `{ email, password }` | `200`, `400`, `401` | Inicia sesión, audita el intento y emite token JWT con claims de roles y permisos. |
-| `GET` | `/api/auth/me` | Autenticado (`[Authorize]`) | — | `200`, `401`, `404` | Devuelve perfil del usuario autenticado, roles, permisos y departamento real (`usuario.DepartamentoId`). |
+| `GET` | `/api/auth/me` | Autenticado (`[Authorize]`) | — | `200`, `401`, `404` | Devuelve perfil del usuario autenticado, roles, permisos y departamento reallo (`usuario.DepartamentoId`). |
 
 ---
 
@@ -76,7 +76,7 @@ Especificación completa de todos los endpoints implementados en el backend del 
 
 | Método | Ruta | Permiso / Política | Parámetros / Body | Respuestas | Descripción |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/bloqueos` | `bloqueos.crear` | Body: `{ espacioId, desde, hasta, motivo, cancelarReservasAfectadas }` | `201`, `400`, `401`, `403`, `404`, `409` | Crea un bloqueo temporal (en el request se envían `desde` y `hasta`; las respuestas de `POST` y `GET` devuelven `fechaHoraDesde` y `fechaHoraHasta`). Si hay reservas afectadas y `cancelarReservasAfectadas = false`, devuelve `409` con `reservasAfectadas`; si es `true`, las cancela atómicamente, audita y notifica. |
+| `POST` | `/api/bloqueos` | `bloqueos.crear` | Body: `{ espacioId, desde, hasta, motivo, cancelarReservasAfectadas, reservasConfirmadas?, versionesReservasConfirmadas? }` | `201`, `400`, `401`, `403`, `404`, `409` | `reservasConfirmadas` es la lista opcional de IDs mostrados y confirmados; `versionesReservasConfirmadas` contiene `{ id, version }` copiados de `reservasAfectadas` para rechazar una confirmación obsoleta. `false` conserva el `409` de consulta. Con `true`, solo se cancela si los conjuntos de IDs y versiones coinciden con las reservas actuales bajo el lock. Diferencias devuelven `409` con la lista actualizada (posiblemente vacía), sin cambios ni notificaciones. `true` sin IDs se rechaza si hay afectadas. |
 | `GET` | `/api/bloqueos` | `bloqueos.ver` | Query: `page`, `pageSize`, `espacioId`, `desde`, `hasta`, `vigentes` | `200`, `400`, `401`, `403` | Listado paginado de bloqueos respetando alcance departamental. |
 | `DELETE` | `/api/bloqueos/{id}` | `bloqueos.crear` | Ruta: `id` (`int`) | `204`, `401`, `403`, `404` | Levanta/elimina el bloqueo y registra en auditoría (no restaura reservas previamente canceladas). |
 
@@ -143,5 +143,5 @@ Todas las respuestas de error devuelven `Content-Type: application/problem+json`
 | **`401` Unauthorized** | `"No autorizado"` | Token JWT ausente, inválido o expirado; credenciales incorrectas; usuario inactivo o dado de baja. | — |
 | **`403` Forbidden** | `"Acceso denegado"` | Usuario sin el permiso requerido por la política del endpoint (`[Authorize(Policy = "...")]`), `ResponsableEspacio` operando sobre un espacio/reserva/bloqueo de otro departamento, o `Solicitante` intentando ver/cancelar/modificar una reserva o notificación ajena (IDOR). | — |
 | **`404` Not Found** | `"Recurso no encontrado"` | Espacio inexistente o dado de baja (`FechaBaja != null` en `GET /api/espacios/{id}`), reserva/bloqueo/notificación/usuario/catálogo inexistente. | — |
-| **`409` Conflict** | `"Conflicto con el estado actual del recurso"` | Superposición horaria con reserva aprobada, bloqueo vigente o cursada oficial (`AsignacionEspacio`); concurrencia simultánea (`xmin` o `EXCLUDE USING gist`); aprobar reserva en el pasado; `POST /api/bloqueos` con reservas afectadas y `cancelarReservasAfectadas = false`; `PUT /api/espacios/{id}` incompatible con reservas futuras activas; `DELETE /api/espacios/{id}` con reservas futuras; código o email duplicado; auto-desactivación o último `Administrador` activo. | `reservasAfectadas` (presente en `POST /api/bloqueos` cuando `cancelarReservasAfectadas = false`) |
+| **`409` Conflict** | `"Conflicto con el estado actual del recurso"` | Superposición horaria con reserva aprobada, bloqueo vigente o cursada oficial (`AsignacionEspacio`); concurrencia simultánea (`xmin` o `EXCLUDE USING gist`); aprobar reserva en el pasado; `POST /api/bloqueos` cuando hay reservas sin confirmar, cambió el conjunto de IDs o cambió la versión de alguna reserva; `PUT /api/espacios/{id}` incompatible con reservas futuras activas; `DELETE /api/espacios/{id}` con reservas futuras; código o email duplicado; auto-desactivación o último `Administrador` activo. | `reservasAfectadas` en los conflictos de `POST /api/bloqueos`; puede ser una lista vacía si ya no quedan reservas en el rango. |
 | **`500` Internal Server Error** | `"Error interno del servidor"` | Excepción no controlada del servidor. | En `Development` incluye detalle de la excepción en `detail`. |

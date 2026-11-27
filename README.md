@@ -116,8 +116,23 @@ Al iniciar, `DatabaseSeeder` carga de forma idempotente los 4 roles, 15 permisos
 ### 5.1 Regla de Reservas Afectadas por Bloqueo (`POST /api/bloqueos`)
 1. **Detección**: Se buscan todas las reservas en estado `Aprobada` o `PendienteAprobacion` en ese espacio que se solapen con el rango (`inicioA < finB AND finA > inicioB`).
 2. **Por defecto (`cancelarReservasAfectadas = false`)**: Si existen reservas afectadas, la operación **no crea el bloqueo** y devuelve **HTTP 409 Conflict** incluyendo en la respuesta JSON la propiedad `reservasAfectadas` (`id`, `solicitante`, `fechaHoraInicio`, `fechaHoraFin`, `estado`).
-3. **Confirmación (`cancelarReservasAfectadas = true`)**: En **una única transacción** serializada con `pg_advisory_xact_lock(espacioId)`, se crea el bloqueo, se transicionan todas las reservas afectadas a `Cancelada` con motivo `"Cancelada por bloqueo del espacio: {motivo}"`, se registra una entrada en `Auditorias` por cada reserva cancelada y se encola una notificación para cada solicitante afectado.
-4. **Levantamiento (`DELETE /api/bloqueos/{id}`)**: Elimina el bloqueo y lo audita (`LevantarBloqueo`). **Las reservas que habían sido canceladas NO se restauran automáticamente**, preservando la trazabilidad histórica y las notificaciones ya emitidas.
+3. **Confirmación (`cancelarReservasAfectadas = true`)**: El cliente envía `reservasConfirmadas` con los IDs mostrados en el `409` y `versionesReservasConfirmadas` con su versión. En una única transacción serializada con `pg_advisory_xact_lock(espacioId)`, el servidor vuelve a obtener las reservas afectadas y compara IDs y versiones. Si la selección no coincide o una reserva cambió, devuelve `409` con la lista actualizada sin crear el bloqueo ni cancelar, auditar o notificar cambios. Si coincide, cancela solo esas reservas, crea el bloqueo, audita y notifica dentro de la transacción.
+4. **Sin lista de IDs**: Si `cancelarReservasAfectadas = true` y hay reservas afectadas, enviar una lista ausente o vacía devuelve `409`; nunca se cancelan todas implícitamente. Si no hay reservas afectadas y ambas listas están vacías o ausentes, crea el bloqueo normalmente.
+5. **Levantamiento (`DELETE /api/bloqueos/{id}`)**: Elimina el bloqueo y lo audita (`LevantarBloqueo`). **Las reservas que habían sido canceladas NO se restauran automáticamente**, preservando la trazabilidad histórica y las notificaciones ya emitidas.
+
+Ejemplo de confirmación (IDs y versiones copiados de `reservasAfectadas`):
+
+```json
+{
+  "espacioId": 4,
+  "desde": "2026-11-25T12:00:00Z",
+  "hasta": "2026-11-25T18:00:00Z",
+  "motivo": "Reparación eléctrica de urgencia",
+  "cancelarReservasAfectadas": true,
+  "reservasConfirmadas": [15],
+  "versionesReservasConfirmadas": [{ "id": 15, "version": 8241 }]
+}
+```
 
 ### 5.2 Zona Horaria Institucional y Manejo de Fechas
 - La facultad opera en la zona horaria **`America/Argentina/Buenos_Aires`** (UTC-3), centralizada en `DateTimeZoneHelper`.
@@ -131,10 +146,10 @@ Al iniciar, `DatabaseSeeder` carga de forma idempotente los 4 roles, 15 permisos
 
 ## 6. Ejecución de las Pruebas Automatizadas (xUnit)
 
-La suite de pruebas (`tests/GestionReservas.Tests`) cuenta con **88 tests de integración** que se ejecutan contra una base de datos PostgreSQL aislada (`GestionReservasDb_Test`), verificando automáticamente que nunca se apunte a la base de desarrollo:
+La suite de pruebas (`tests/GestionReservas.Tests`) cuenta con **102 tests de integración** que se ejecutan contra una base de datos PostgreSQL aislada (`GestionReservasDb_Test`), verificando automáticamente que nunca se apunte a la base de desarrollo:
 
 ```powershell
-# Ejecutar toda la suite (88 tests)
+# Ejecutar toda la suite (102 tests)
 dotnet test
 
 # Ejecutar únicamente los 11 criterios de aceptación de la defensa (Sección 13 del enunciado)
@@ -163,7 +178,7 @@ dotnet test --filter "FullyQualifiedName~CriteriosAceptacionDefensaTests"
    - Como `docente.perez`, modificar el horario de la reserva aprobada $\to$ **200 OK** y su estado vuelve automáticamente a **`PendienteAprobacion`**.
 6. **Bloqueo con Reservas Afectadas (`POST /api/bloqueos`)**:
    - Como `responsable.sistemas` o `admin`, enviar `POST /api/bloqueos` sobre `LAB-SIS-01` cubriendo el horario de la reserva con `"cancelarReservasAfectadas": false` $\to$ **409 Conflict** devolviendo la lista `reservasAfectadas`.
-   - Reenviar con `"cancelarReservasAfectadas": true` $\to$ **201 Created**, la reserva pasa a `Cancelada`, y el docente recibe el aviso en `GET /api/notificaciones?leida=false`.
+   - Reenviar con `"cancelarReservasAfectadas": true`, `reservasConfirmadas` y la versión actual devuelta en el `409` $\to$ **201 Created**, la reserva pasa a `Cancelada`, y el docente recibe el aviso en `GET /api/notificaciones?leida=false`. Si la lista o una reserva cambió, revisar y confirmar de nuevo.
 7. **Calendario Unificado y Privacidad (`GET /api/calendario`)**:
    - Consultar `GET /api/calendario?desde=2026-11-01T00:00:00Z&hasta=2026-11-30T23:59:59Z` como `docente.perez`: muestra sus propias reservas con detalle completo, las reservas ajenas como `"Ocupado"` sin datos sensibles, los bloqueos como `"Bloqueado"` sin motivo y las cursadas proyectadas en cada martes y jueves del mes.
    - Repetir la consulta como `admin@facultad.edu.ar`: visualiza todos los solicitantes, motivos y observaciones.

@@ -25,7 +25,7 @@ public class BloqueosController : ControllerBase
     /// <summary>
     /// Registra un nuevo bloqueo temporal sobre un espacio.
     /// Si hay reservas afectadas y cancelarReservasAfectadas es false, devuelve 409 con el listado.
-    /// Si es true, cancela atómicamente las reservas afectadas y las devuelve en la respuesta.
+    /// Si es true, requiere confirmar todos los IDs y versiones devueltos previamente; ante cambios devuelve 409 actualizado.
     /// </summary>
     [HttpPost]
     [Authorize(Policy = PermisosDefinidos.BloqueosCrear)]

@@ -482,11 +482,8 @@ public class ReservasService : IReservasService
                 throw new NotFoundException($"No se encontró la reserva con identificador {id}.");
             }
 
-            // Lock transaccional por espacio (aprobar): serializa aprobaciones concurrentes del mismo espacio
-            if (accionNormalizada == ReservaStateMachine.AccionAprobar)
-            {
-                await _context.AcquireAdvisoryXactLockAsync(espacioIdReserva.Value, cancellationToken);
-            }
+            // Toda transición comparte el lock usado por los bloqueos para evitar carreras entre xmin y la cancelación.
+            await _context.AcquireAdvisoryXactLockAsync(espacioIdReserva.Value, cancellationToken);
 
             // Se carga la reserva DESPUÉS del lock para ver el estado confirmado por transacciones previas
             var reserva = await _context.Reservas

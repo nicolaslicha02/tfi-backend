@@ -59,7 +59,18 @@ public class CrearBloqueoRequestDto
     public string Motivo { get; set; } = string.Empty;
 
     /// <summary>
-    /// Si es true, cancela automáticamente las reservas pendientes y aprobadas afectadas en el rango.
+    /// IDs de las reservas que el usuario confirmó cancelar. Los IDs se comparan como conjunto.
+    /// </summary>
+    public List<int>? ReservasConfirmadas { get; set; }
+
+    /// <summary>
+    /// Versiones devueltas con cada reserva afectada. Si alguna reserva cambió desde que se mostró,
+    /// la confirmación queda obsoleta y el servidor devuelve 409.
+    /// </summary>
+    public List<ReservaConfirmadaVersionDto>? VersionesReservasConfirmadas { get; set; }
+
+    /// <summary>
+    /// Si es true, cancela solo reservas actuales que coinciden con la selección confirmada.
     /// Si es false y existen reservas afectadas, rechaza la operación con código 409 Conflict.
     /// </summary>
     public bool CancelarReservasAfectadas { get; set; } = false;

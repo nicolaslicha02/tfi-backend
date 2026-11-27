@@ -111,29 +111,28 @@ public class BloqueosService : IBloqueosService
                 .OrderBy(r => r.FechaHoraInicio)
                 .ToListAsync(cancellationToken);
 
-            // 6. Si existen afectadas y no se solicitó cancelarlas, retornar 409 Conflict con la lista detallada
+            var afectadasDto = reservasAfectadas.Select(MapearReservaAfectada).ToList();
+
+            // 6. Enviar la lista actual para que el cliente la muestre y recoja una confirmación explícita.
             if (reservasAfectadas.Count > 0 && !request.CancelarReservasAfectadas)
             {
-                var afectadasDto = reservasAfectadas.Select(r => new ReservaAfectadaDto
-                {
-                    Id = r.Id,
-                    SolicitanteId = r.SolicitanteId,
-                    Solicitante = r.Solicitante.NombreCompleto,
-                    SolicitanteEmail = r.Solicitante.Email,
-                    FechaHoraInicio = r.FechaHoraInicio,
-                    FechaHoraFin = r.FechaHoraFin,
-                    Estado = r.Estado
-                }).ToList();
-
                 throw new ConflictException(
-                    $"No se puede crear el bloqueo porque existen {afectadasDto.Count} reserva(s) afectada(s) en ese horario. Indique 'cancelarReservasAfectadas = true' para cancelarlas automáticamente.",
+                    "Hay reservas en ese horario. Revisá la lista y confirmá cuáles querés cancelar.",
+                    afectadasDto);
+            }
+
+            // 7. La confirmación se compara con el estado actual bajo el lock del espacio.
+            if (request.CancelarReservasAfectadas && !ConfirmacionCoincide(request, reservasAfectadas))
+            {
+                throw new ConflictException(
+                    "La lista de reservas cambió o alguna reserva fue actualizada. Revisá la lista y confirmá nuevamente.",
                     afectadasDto);
             }
 
             var ahoraUtc = DateTime.UtcNow;
             var reservasCanceladasDto = new List<ReservaAfectadaDto>();
 
-            // 7. Si cancelarReservasAfectadas = true, cancelar cada una usando la máquina de estados, auditar y notificar
+            // 8. Cancelar únicamente las reservas de la lista confirmada y mantener auditoría/notificaciones.
             if (reservasAfectadas.Count > 0)
             {
                 foreach (var reserva in reservasAfectadas)
@@ -165,20 +164,11 @@ public class BloqueosService : IBloqueosService
                         reserva.SolicitanteId,
                         $"Su reserva #{reserva.Id} para el espacio '{espacio.Codigo}' ha sido CANCELADA debido a un bloqueo del espacio: {request.Motivo.Trim()}");
 
-                    reservasCanceladasDto.Add(new ReservaAfectadaDto
-                    {
-                        Id = reserva.Id,
-                        SolicitanteId = reserva.SolicitanteId,
-                        Solicitante = reserva.Solicitante.NombreCompleto,
-                        SolicitanteEmail = reserva.Solicitante.Email,
-                        FechaHoraInicio = reserva.FechaHoraInicio,
-                        FechaHoraFin = reserva.FechaHoraFin,
-                        Estado = nuevoEstado
-                    });
+                    reservasCanceladasDto.Add(MapearReservaAfectada(reserva));
                 }
             }
 
-            // 8. Crear y persistir el bloqueo
+            // 9. Crear y persistir el bloqueo
             var bloqueo = new Bloqueo
             {
                 EspacioId = espacio.Id,
@@ -192,7 +182,12 @@ public class BloqueosService : IBloqueosService
             _context.Bloqueos.Add(bloqueo);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // 9. Auditar la creación del bloqueo
+            foreach (var reservaCancelada in reservasCanceladasDto)
+            {
+                reservaCancelada.Version = reservasAfectadas.First(r => r.Id == reservaCancelada.Id).RowVersion;
+            }
+
+            // 10. Auditar la creación del bloqueo
             _context.Auditorias.Add(new Auditoria
             {
                 UsuarioId = usuarioId,
@@ -231,11 +226,77 @@ public class BloqueosService : IBloqueosService
                 ReservasCanceladas = reservasCanceladasDto
             };
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+
+            var reservasActuales = await ObtenerReservasAfectadasAsync(
+                espacio.Id, desdeUtc, hastaUtc, cancellationToken);
+            throw new ConflictException(
+                "Una reserva cambió mientras se procesaba el bloqueo. Revisá la lista y confirmá nuevamente.",
+                reservasActuales);
+        }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    private async Task<List<ReservaAfectadaDto>> ObtenerReservasAfectadasAsync(
+        int espacioId,
+        DateTime desdeUtc,
+        DateTime hastaUtc,
+        CancellationToken cancellationToken)
+    {
+        var reservas = await _context.Reservas
+            .AsNoTracking()
+            .Include(r => r.Solicitante)
+            .Where(r => r.EspacioId == espacioId &&
+                        (r.Estado == EstadoReserva.Aprobada || r.Estado == EstadoReserva.PendienteAprobacion) &&
+                        r.FechaHoraInicio < hastaUtc &&
+                        r.FechaHoraFin > desdeUtc)
+            .OrderBy(r => r.FechaHoraInicio)
+            .ToListAsync(cancellationToken);
+
+        return reservas.Select(MapearReservaAfectada).ToList();
+    }
+
+    private static ReservaAfectadaDto MapearReservaAfectada(Reserva reserva) => new()
+    {
+        Id = reserva.Id,
+        SolicitanteId = reserva.SolicitanteId,
+        Solicitante = reserva.Solicitante.NombreCompleto,
+        SolicitanteEmail = reserva.Solicitante.Email,
+        FechaHoraInicio = reserva.FechaHoraInicio,
+        FechaHoraFin = reserva.FechaHoraFin,
+        Estado = reserva.Estado,
+        Version = reserva.RowVersion
+    };
+
+    private static bool ConfirmacionCoincide(CrearBloqueoRequestDto request, IReadOnlyCollection<Reserva> reservasAfectadas)
+    {
+        var idsConfirmados = (request.ReservasConfirmadas ?? []).ToHashSet();
+        var idsAfectados = reservasAfectadas.Select(r => r.Id).ToHashSet();
+
+        if (!idsConfirmados.SetEquals(idsAfectados))
+        {
+            return false;
+        }
+
+        var versionesRecibidas = request.VersionesReservasConfirmadas ?? [];
+        if (versionesRecibidas.GroupBy(x => x.Id).Any(g => g.Select(x => x.Version).Distinct().Count() != 1))
+        {
+            return false;
+        }
+
+        var versionesPorId = versionesRecibidas
+            .GroupBy(x => x.Id)
+            .ToDictionary(g => g.Key, g => g.First().Version);
+
+        return versionesPorId.Count == idsAfectados.Count &&
+               idsAfectados.SetEquals(versionesPorId.Keys) &&
+               reservasAfectadas.All(r => versionesPorId.TryGetValue(r.Id, out var version) && version == r.RowVersion);
     }
 
     public async Task<PagedResultDto<BloqueoListadoDto>> GetBloqueosAsync(BloqueosQueryParameters queryParams, CancellationToken cancellationToken = default)
